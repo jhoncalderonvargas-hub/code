@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Gestor de flota conectado a la API de Traccar.">
+  <title>Gestor de flota | FLOTA</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="assets/css/main.css">
+</head>
+<body>
+  <a class="skip-link" href="#contenido">Saltar al contenido</a>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="Ir al panel del gestor de flota">
+        <span class="brand__mark" aria-hidden="true">FL</span>
+        <span><span class="brand__name">FLOTA</span><span class="brand__description">Gestor de flota · GPS Traccar</span></span>
+      </a>
+      <div class="user-summary" aria-label="Usuario actual">
+        <button class="button button--icon" id="btn-modo-oscuro" type="button" title="Modo oscuro">🌙</button>
+        <span class="avatar" aria-hidden="true">OP</span>
+        <span><strong>Operador de flota</strong><span class="user-summary__meta">Administrador</span></span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar" aria-label="Navegación principal">
+        <nav>
+          <ul class="nav-list">
+            <li><a class="nav-link" href="#panel" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span>Panel</a></li>
+            <li><a class="nav-link" href="#seccion-vehiculos"><span class="nav-icon" aria-hidden="true">◈</span>Vehículos</a></li>
+            <li><a class="nav-link" href="#seccion-mapa"><span class="nav-icon" aria-hidden="true">⌖</span>Mapa</a></li>
+            <li><a class="nav-link" href="#seccion-historial"><span class="nav-icon" aria-hidden="true">▶</span>Historial</a></li>
+            <li><a class="nav-link" href="#seccion-alarmas"><span class="nav-icon" aria-hidden="true">⚠</span>Alarmas</a></li>
+            <li><a class="nav-link" href="#seccion-reportes"><span class="nav-icon" aria-hidden="true">📊</span>Reportes</a></li>
+            <li><a class="nav-link" href="#seccion-geozonas"><span class="nav-icon" aria-hidden="true">◎</span>Geozonas</a></li>
+            <li><a class="nav-link" href="#seccion-hospitales"><span class="nav-icon" aria-hidden="true">🏥</span>Hospitales</a></li>
+            <li><a class="nav-link" href="#" data-abrir-configuracion><span class="nav-icon" aria-hidden="true">⚙</span>Configuración</a></li>
+            <li><a class="nav-link" href="#" id="btn-abrir-conductores"><span class="nav-icon" aria-hidden="true">👤</span>Conductores</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <main class="page" id="contenido">
+        <header class="page-header" id="panel">
+          <div>
+            <h1>Panel de flota</h1>
+            <p class="page-description">Monitoreo en tiempo real de tus vehículos registrados en Traccar.</p>
+          </div>
+          <div class="cluster cluster--center">
+            <span class="conexion conexion--wait" id="conexion" aria-live="polite"><span class="conexion__dot"></span><span id="conexion-texto">Iniciando…</span></span>
+            <button class="button button--filled" id="btn-refrescar" type="button">Actualizar</button>
+            <button class="button button--outlined" id="btn-config" type="button">Configuración</button>
+          </div>
+        </header>
+
+        <div class="alert alert--warning" id="alerta-inicial" hidden>
+          <div><strong id="alerta-inicial-titulo"></strong><p class="note" id="alerta-inicial-texto"></p></div>
+          <button class="button button--outlined" id="btn-alerta" type="button"></button>
+        </div>
+
+        <section class="grid stats-grid" aria-label="Indicadores de la flota">
+          <article class="card stat-card"><p class="stat-card__label">Vehículos</p><p class="stat-card__value" id="stat-total">–</p><span class="stat-card__trend" id="stat-total-trend">&nbsp;</span></article>
+          <article class="card stat-card"><p class="stat-card__label">En línea</p><p class="stat-card__value" id="stat-online">–</p><span class="stat-card__trend" id="stat-online-trend">&nbsp;</span></article>
+          <article class="card stat-card"><p class="stat-card__label">En movimiento</p><p class="stat-card__value" id="stat-moving">–</p><span class="stat-card__trend" id="stat-moving-trend">&nbsp;</span></article>
+          <article class="card stat-card"><p class="stat-card__label">Distancia de hoy</p><p class="stat-card__value" id="stat-distance">–</p><span class="stat-card__trend" id="stat-distance-trend">&nbsp;</span></article>
+          <article class="card stat-card"><p class="stat-card__label">Combustible hoy</p><p class="stat-card__value" id="stat-fuel">–</p><span class="stat-card__trend" id="stat-fuel-trend">&nbsp;</span></article>
+        </section>
+
+        <section id="seccion-vehiculos">
+          <div class="cluster section-head">
+            <h2>Vehículos</h2>
+            <span class="note" id="ultima-actualizacion"></span>
+          </div>
+          <div class="filtros-bar">
+            <input id="filtro-buscar" type="text" placeholder="Buscar por nombre o ID..." class="filtro-input">
+            <select id="filtro-estado" class="filtro-select">
+              <option value="">Todos los estados</option>
+              <option value="moving">En movimiento</option>
+              <option value="stopped">Detenidos</option>
+              <option value="offline">Sin señal</option>
+              <option value="nodata">Sin datos</option>
+            </select>
+            <select id="filtro-conductor" class="filtro-select">
+              <option value="">Todos los conductores</option>
+            </select>
+          </div>
+          <div class="grid vehicles-grid" id="vehiculos"></div>
+        </section>
+
+        <section id="seccion-mapa" style="margin-top: 1.5rem;">
+          <div class="cluster section-head">
+            <h2>Mapa en vivo</h2>
+            <span class="note">Posiciones sobre OpenStreetMap (Leaflet)</span>
+          </div>
+          <div class="map-wrap">
+            <div id="mapa" role="application" aria-label="Mapa con las posiciones de la flota"></div>
+            <div class="layer-control" id="layer-control">
+              <div class="layer-control__title">Capas</div>
+              <label class="layer-control__item">
+                <input type="checkbox" id="layer-vehiculos" checked> 🚗 Vehículos
+              </label>
+              <label class="layer-control__item">
+                <input type="checkbox" id="layer-geozonas" checked> ◎ Geozonas
+              </label>
+              <label class="layer-control__item">
+                <input type="checkbox" id="layer-pois" checked> 📍 POIs
+              </label>
+              <label class="layer-control__item">
+                <input type="checkbox" id="layer-hospitales"> 🏥 Hospitales
+              </label>
+              <label class="layer-control__item">
+                <input type="checkbox" id="layer-cobertura"> ⭕ Cobertura
+              </label>
+              <label class="layer-control__item">
+                <input type="checkbox" id="layer-ruta" checked> 🛤️ Historial
+              </label>
+            </div>
+          </div>
+        </section>
+
+        <section id="seccion-historial" style="margin-top: 1.5rem;">
+          <div class="cluster section-head">
+            <h2>Historial y reproducción de rutas</h2>
+          </div>
+          <div class="card" style="padding: 1rem;">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr auto; align-items: end; gap: 0.75rem;">
+              <div class="field">
+                <label for="hist-vehiculo">Vehículo</label>
+                <select id="hist-vehiculo"></select>
+              </div>
+              <div class="field">
+                <label for="hist-desde">Desde</label>
+                <input id="hist-desde" type="datetime-local">
+              </div>
+              <div class="field">
+                <label for="hist-hasta">Hasta</label>
+                <input id="hist-hasta" type="datetime-local">
+              </div>
+              <button class="button button--filled" id="btn-cargar-historial" type="button">Cargar ruta</button>
+            </div>
+            <div id="hist-info" class="note" style="margin-top: 0.75rem;"></div>
+            <div id="hist-controles" style="display:none; margin-top: 1rem;">
+              <div class="playback-bar">
+                <button class="button button--icon" id="pb-play" type="button">▶</button>
+                <span id="pb-fecha" style="min-width:160px;"></span>
+                <input type="range" id="pb-slider" min="0" max="100" value="0" style="flex:1;">
+                <select id="pb-velocidad" class="filtro-select" style="width:auto;">
+                  <option value="1">1x</option>
+                  <option value="2">2x</option>
+                  <option value="5" selected>5x</option>
+                  <option value="10">10x</option>
+                  <option value="20">20x</option>
+                </select>
+              </div>
+              <div id="pb-info" class="note" style="margin-top: 0.5rem;"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="seccion-alarmas" style="margin-top: 1.5rem;">
+          <div class="cluster section-head">
+            <h2>Alarmas y eventos</h2>
+            <span class="badge badge--neutral" id="alarmas-num">0</span>
+            <button class="button button--outlined" id="btn-limpiar-alarmas" type="button">Limpiar</button>
+          </div>
+          <div class="card stack-eventos" id="alarmas"></div>
+        </section>
+
+        <section id="seccion-reportes" style="margin-top: 1.5rem;">
+          <div class="cluster section-head">
+            <h2>Reportes</h2>
+          </div>
+          <div class="card" style="padding: 1rem;">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr auto auto auto; align-items: end; gap: 0.75rem;">
+              <div class="field">
+                <label for="rep-desde">Desde</label>
+                <input id="rep-desde" type="datetime-local">
+              </div>
+              <div class="field">
+                <label for="rep-hasta">Hasta</label>
+                <input id="rep-hasta" type="datetime-local">
+              </div>
+              <div class="field">
+                <label for="reporte-tipo">Tipo de reporte</label>
+                <select id="reporte-tipo" class="filtro-select">
+                  <option value="resumen">Resumen completo</option>
+                  <option value="trayectos">Solo trayectos</option>
+                  <option value="velocidad">Excesos de velocidad</option>
+                  <option value="paradas">Paradas</option>
+                </select>
+              </div>
+              <button class="button button--filled" id="btn-generar-reporte" type="button">Generar</button>
+              <div class="cluster">
+                <button class="button button--outlined" id="btn-exportar-csv" type="button">CSV</button>
+                <button class="button button--outlined" id="btn-exportar-pdf" type="button">PDF</button>
+              </div>
+            </div>
+            <div class="card" id="reporte-resultado" style="padding: 1rem; overflow-x: auto; margin-top: 1rem;">
+              <p class="note">Elegí fechas, tipo de reporte y hacé click en "Generar".</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="seccion-geozonas" style="margin-top: 1.5rem;">
+          <div class="cluster section-head">
+            <h2>Geozonas</h2>
+            <button class="button button--filled" id="btn-nueva-geozona" type="button">+ Nueva geozona</button>
+          </div>
+          <div class="grid geozonas-grid" id="geozonas"></div>
+        </section>
+
+        <section id="seccion-pois" style="margin-top: 1.5rem;">
+          <div class="cluster section-head">
+            <h2>Puntos de interés</h2>
+            <button class="button button--filled" id="btn-nuevo-poi" type="button">+ Nuevo POI</button>
+          </div>
+          <div class="grid geozonas-grid" id="pois"></div>
+        </section>
+
+        <section id="seccion-hospitales" style="margin-top: 1.5rem;">
+          <div class="cluster section-head">
+            <h2>Hospitales / IPS</h2>
+            <button class="button button--filled" id="btn-toggle-hospitales" type="button">Mostrar en mapa</button>
+            <select id="select-radio-cobertura" class="filtro-select">
+              <option value="3000">Cobertura 3 km</option>
+              <option value="5000" selected>Cobertura 5 km</option>
+              <option value="10000">Cobertura 10 km</option>
+              <option value="15000">Cobertura 15 km</option>
+            </select>
+          </div>
+          <p class="note" style="margin-bottom: 0.75rem;">Capa de sedes de salud con cobertura por radio para análisis territorial.</p>
+          <div class="grid geozonas-grid" id="hospitales"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+      <div class="modal__head">
+        <h2 id="modal-titulo">Configuración de la conexión</h2>
+        <button class="close" id="modal-cerrar" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <form id="form-config" class="modal__body">
+        <p class="note">Modo recomendado: abre la app con el proxy (<code>node proxy-server.js</code>) y usa <code>http://localhost:3000</code>. Él sirve la web y reenvía <code>/api</code> a tu Traccar nativo evita CORS. Velocidad: Traccar devuelve nudos, la app convierte a km/h.</p>
+
+        <div class="stack">
+          <div class="field">
+            <label for="cfg-base">URL del servidor Traccar *</label>
+            <input id="cfg-base" name="baseUrl" type="url" placeholder="http://localhost:8082" required>
+            <p class="field__help">Con proxy: http://localhost:3000 (recomendado) · Directo: http://localhost:8082 (requiere CORS habilitado en Traccar) · Demo: https://demo.traccar.org</p>
+          </div>
+
+          <div class="field">
+            <label for="cfg-metodo">Método de autenticación</label>
+            <select id="cfg-metodo" name="authType">
+              <option value="basic">Usuario y contraseña</option>
+              <option value="token">Token de autorización</option>
+            </select>
+          </div>
+
+          <div class="field" id="campo-token" hidden>
+            <label for="cfg-token">Token de autorización</label>
+            <input id="cfg-token" name="token" type="text" placeholder="Genera un token en tu perfil de Traccar">
+            <p class="field__help">En Traccar: avatar → Configuración del usuario → Tokens de autorización.</p>
+          </div>
+
+          <div class="form-grid" id="campo-basico">
+            <div class="field">
+              <label for="cfg-user">Correo electrónico</label>
+              <input id="cfg-user" name="user" type="email" placeholder="admin@dominio.com">
+            </div>
+            <div class="field">
+              <label for="cfg-pass">Contraseña</label>
+              <input id="cfg-pass" name="password" type="password">
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="cfg-ids">IDs de los vehículos <span class="note">(opcional)</span></label>
+            <input id="cfg-ids" name="deviceIds" type="text" placeholder="1,2">
+            <p class="field__help">Separados por coma. Vacío = se toman todos los dispositivos de tu cuenta.</p>
+          </div>
+
+          <div class="field">
+            <label for="cfg-refresh">Actualización automática (segundos)</label>
+            <input id="cfg-refresh" name="refreshSec" type="number" min="5" max="300" step="1">
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="cfg-consumo">Consumo medio (L/100 km)</label>
+              <input id="cfg-consumo" name="consumoMedio" type="number" min="0.5" max="50" step="0.1">
+              <p class="field__help">Dato de referencia para estimar litros por distancia. Puedes ajustarlo por vehículo en cada tarjeta.</p>
+            </div>
+            <div class="field">
+              <label for="cfg-precio">Precio combustible (COP/L)</label>
+              <input id="cfg-precio" name="precioCombustible" type="number" min="0" step="100">
+              <p class="field__help">Usado para el costo estimado. Déjalo en 0 o vacío para no calcular costo.</p>
+            </div>
+          </div>
+          <div class="field">
+            <label for="cfg-velocidad">Límite de velocidad (km/h)</label>
+            <input id="cfg-velocidad" name="limiteVelocidad" type="number" min="20" max="200" step="5">
+            <p class="field__help">Velocidad máxima permitida. Si un vehículo supera este límite, se muestra una alerta roja.</p>
+          </div>
+        </div>
+
+        <div id="resultado-prueba" aria-live="polite"></div>
+
+        <div class="form-actions">
+          <button class="button button--outlined" id="btn-probar" type="button">Probar conexión</button>
+          <span class="grow"></span>
+          <button class="button button--outlined" id="btn-cancelar-config" type="button">Cancelar</button>
+          <button class="button button--filled" type="submit">Guardar y conectar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-geozona" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-geozona-titulo">
+      <div class="modal__head">
+        <h2 id="modal-geozona-titulo">Nueva geozona</h2>
+        <button class="close" id="gz-cerrar" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <form id="form-geozona" class="modal__body">
+        <div class="stack">
+          <div class="field">
+            <label for="gz-nombre">Nombre *</label>
+            <input id="gz-nombre" name="gz-nombre" type="text" required placeholder="Ej. Sede principal">
+          </div>
+          <div class="field">
+            <label for="gz-desc">Descripción</label>
+            <input id="gz-desc" name="gz-desc" type="text" placeholder="Opcional">
+          </div>
+          <div class="field">
+            <label for="gz-elegir">Posición base</label>
+            <select id="gz-elegir"></select>
+            <p class="field__help">Toma las coordenadas de un vehículo o del centro actual del mapa.</p>
+          </div>
+          <div class="form-grid">
+            <div class="field"><label for="gz-lat">Latitud *</label><input id="gz-lat" name="gz-lat" type="number" step="any" required></div>
+            <div class="field"><label for="gz-lon">Longitud *</label><input id="gz-lon" name="gz-lon" type="number" step="any" required></div>
+            <div class="field"><label for="gz-radio">Radio (metros) *</label><input id="gz-radio" name="gz-radio" type="number" min="50" step="50" required></div>
+            <div class="field"><label for="gz-aplicar">Aplicar a</label><select id="gz-aplicar"></select></div>
+          </div>
+          <div class="form-actions">
+            <button class="button button--outlined" id="gz-dibujar" type="button">Dibujar en mapa</button>
+            <span class="grow"></span>
+            <button class="button button--outlined" id="gz-cancelar" type="button">Cancelar</button>
+            <button class="button button--filled" type="submit">Crear geozona</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <div class="modal-overlay" id="modal-conductores" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-conductores-titulo">
+      <div class="modal__head">
+        <h2 id="modal-conductores-titulo">Administrar conductores</h2>
+        <button class="close" id="cn-cerrar" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <div class="modal__body">
+        <div id="lista-conductores-admin" class="stack-conductores"></div>
+        <div class="form-actions" style="margin-top: 1rem;">
+          <button class="button button--filled" id="cn-agregar" type="button">+ Nuevo conductor</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-poi" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-poi-titulo">
+      <div class="modal__head">
+        <h2 id="modal-poi-titulo">Nuevo punto de interés</h2>
+        <button class="close" id="poi-cerrar" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <form id="form-poi" class="modal__body">
+        <div class="stack">
+          <div class="field">
+            <label for="poi-nombre">Nombre *</label>
+            <input id="poi-nombre" type="text" required placeholder="Ej. Bodega principal">
+          </div>
+          <div class="field">
+            <label for="poi-tipo">Tipo</label>
+            <select id="poi-tipo">
+              <option value="pin">📍 Pin</option>
+              <option value="bodega">🏭 Bodega</option>
+              <option value="cliente">👤 Cliente</option>
+              <option value="gasolinera">⛽ Gasolinera</option>
+              <option value="taller">🔧 Taller</option>
+              <option value="oficina">🏢 Oficina</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="poi-elegir">Ubicación base</label>
+            <select id="poi-elegir"></select>
+            <p class="field__help">Toma las coordenadas de un vehículo o del centro del mapa.</p>
+          </div>
+          <div class="form-grid">
+            <div class="field"><label for="poi-lat">Latitud *</label><input id="poi-lat" type="number" step="any" required></div>
+            <div class="field"><label for="poi-lon">Longitud *</label><input id="poi-lon" type="number" step="any" required></div>
+          </div>
+          <div class="form-actions">
+            <button class="button button--outlined" id="poi-cancelar" type="button">Cancelar</button>
+            <button class="button button--filled" type="submit">Guardar POI</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modal-hospital" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-hospital-titulo">
+      <div class="modal__head">
+        <h2 id="modal-hospital-titulo">Editar hospital</h2>
+        <button class="close" id="hospital-cerrar" type="button" aria-label="Cerrar">×</button>
+      </div>
+      <form id="form-hospital" class="modal__body">
+        <div class="stack">
+          <div class="field">
+            <label for="hospital-nombre">Nombre</label>
+            <input id="hospital-nombre" type="text" readonly class="input-readonly">
+          </div>
+          <div class="field">
+            <label for="hospital-tipo">Tipo</label>
+            <input id="hospital-tipo" type="text" readonly class="input-readonly">
+          </div>
+          <div class="field">
+            <label for="hospital-direccion">Dirección</label>
+            <input id="hospital-direccion" type="text">
+          </div>
+          <div class="field">
+            <label for="hospital-telefono">Teléfono</label>
+            <input id="hospital-telefono" type="text">
+          </div>
+          <div class="form-grid">
+            <div class="field"><label for="hospital-lat">Latitud *</label><input id="hospital-lat" type="number" step="any" required></div>
+            <div class="field"><label for="hospital-lon">Longitud *</label><input id="hospital-lon" type="number" step="any" required></div>
+          </div>
+          <div class="form-actions">
+            <button class="button button--outlined" id="hospital-cancelar" type="button">Cancelar</button>
+            <button class="button button--filled" type="submit">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
