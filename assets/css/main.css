@@ -149,6 +149,13 @@ a {
   letter-spacing: 0.02em;
 }
 
+.brand__icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
 .brand__name {
   display: block;
   font-weight: 700;
