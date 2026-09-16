@@ -1454,9 +1454,9 @@
   }
 
   function renderHospitales() {
-    var summary = $("#hospital-summary");
+    var summaryContent = $(".hospital-summary__content");
     var contenedor = $("#hospitales");
-    if (!summary || !contenedor) return;
+    if (!summaryContent || !contenedor) return;
 
     var tipos = {};
     var totalCamas = 0;
@@ -1468,12 +1468,12 @@
       return '<span class="chip">' + esc(t) + ': ' + tipos[t] + '</span>';
     }).join("");
 
-    summary.innerHTML =
+    summaryContent.innerHTML =
       '<div class="hospital-summary__stats">' +
-        '<div class="hospital-summary__item"><span class="hospital-summary__value">' + hospitales.length + '</span><span class="hospital-summary__label">Sedes</span></div>' +
-        '<div class="hospital-summary__item"><span class="hospital-summary__value">' + totalCamas.toLocaleString("es-CO") + '</span><span class="hospital-summary__label">Camas</span></div>' +
+        '<div class="hospital-summary__item"><span class="hospital-summary__value">' + hospitales.length + '</span><span class="hospital-summary__label">sedes</span></div>' +
+        '<div class="hospital-summary__item"><span class="hospital-summary__value">' + totalCamas.toLocaleString("es-CO") + '</span><span class="hospital-summary__label">camas</span></div>' +
       '</div>' +
-      '<div class="cluster" style="gap:0.4rem; margin-top:0.5rem;">' + tipoHtml + '</div>';
+      '<div class="cluster" style="gap:0.3rem;">' + tipoHtml + '</div>';
 
     contenedor.innerHTML = hospitales.map(function (h) {
       return '<article class="card geozona">' +
@@ -1497,7 +1497,8 @@
       expandBtn.onclick = function () {
         var visible = !expandSection.hidden;
         expandSection.hidden = visible;
-        expandBtn.textContent = visible ? "Mostrar todos los hospitales" : "Ocultar hospitales";
+        expandBtn.textContent = visible ? "＋" : "−";
+        expandBtn.title = visible ? "Mostrar todos" : "Ocultar";
       };
     }
   }
@@ -1761,7 +1762,7 @@
           html += '<p style="margin:0.5rem 0 0.25rem;font-weight:600;">' + esc(r.nombre) + ' (' + esc(r.conductor) + ')</p>';
           html += '<table class="table-report"><thead><tr><th>#</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Distancia</th><th>Vel. máx</th><th>Vel. prom</th><th>Paradas</th></tr></thead><tbody>';
           r.trayectos.forEach(function (t, idx) {
-            html += '<tr><td>' + (idx + 1) + '</td><td>' + horaLocal(t.inicio) + '</td><td>' + horaLocal(t.fin) + '</td><td>' + t.durMin + ' min</td><td>' + t.km.toFixed(1) + ' km</td><td>' + t.maxVel + ' km/h</td><td>' + t.promVel + ' km/h</td><td>' + t.paradas + '</td></tr>';
+            html += '<tr><td>' + (idx + 1) + '</td><td>' + fechaHoraLocal(t.inicio) + '</td><td>' + fechaHoraLocal(t.fin) + '</td><td>' + t.durMin + ' min</td><td>' + t.km.toFixed(1) + ' km</td><td>' + t.maxVel + ' km/h</td><td>' + t.promVel + ' km/h</td><td>' + t.paradas + '</td></tr>';
           });
           html += '</tbody></table>';
         });
@@ -2188,6 +2189,13 @@
 
   function horaLocal(iso) {
     return new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  }
+
+  function fechaHoraLocal(iso) {
+    var d = new Date(iso);
+    var fecha = d.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "2-digit" });
+    var hora = d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+    return fecha + ' ' + hora;
   }
 
   function distanciaKm(lat1, lon1, lat2, lon2) {

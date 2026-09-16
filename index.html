@@ -229,12 +229,13 @@
               <option value="15000">Cobertura 15 km</option>
             </select>
           </div>
-          <p class="note" style="margin-bottom: 0.75rem;">Capa de sedes de salud con cobertura por radio para análisis territorial.</p>
-          <div class="hospital-summary" id="hospital-summary"></div>
+          <div class="hospital-summary" id="hospital-summary">
+            <div class="hospital-summary__content"></div>
+            <button class="hospital-summary__expand" id="btn-expandir-hospitales" type="button" title="Mostrar todos">＋</button>
+          </div>
           <div class="hospital-expand" id="hospital-expand" hidden>
             <div class="grid geozonas-grid" id="hospitales"></div>
           </div>
-          <button class="button button--outlined" id="btn-expandir-hospitales" type="button" style="margin-top: 0.75rem;">Mostrar todos los hospitales</button>
         </section>
       </main>
     </div>
