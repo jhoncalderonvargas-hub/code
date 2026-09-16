@@ -868,6 +868,7 @@
           nuevos.forEach(notificarEvento);
           var nuevosEnriquecidos = arr.filter(function (e) { return !eventos.some(function (ex) { return ex.id === e.id; }); }).map(enriquecerEvento);
           eventos = nuevosEnriquecidos.concat(eventos).slice(0, 40);
+          renderAlarmas();
         }
         var claves = Object.keys(idsVistos);
         if (claves.length > 200) {
@@ -967,6 +968,7 @@
       eventosSos.unshift(ev);
       eventosSos = eventosSos.slice(0, 40);
       mostrarToast("¡SOS! Alarma de pánico desde " + nombre, "error");
+      renderAlarmas();
     });
   }
 
@@ -1697,6 +1699,48 @@
     var desdeIso = new Date(desde).toISOString();
     var hastaIso = new Date(hasta).toISOString();
     resultado.innerHTML = '<p class="note">Generando reporte...</p>';
+    if (tipo === "eventos") {
+      var ids = vehiculos.map(function (v) { return v.id; });
+      var tipos = "geofenceEnter,geofenceExit,geofence,alarm".split(",");
+      var params = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
+        "&" + tipos.map(function (t) { return "type=" + encodeURIComponent(t); }).join("&") +
+        "&from=" + desdeIso + "&to=" + hastaIso;
+      llamarApi("/reports/events?" + params).then(function (ev) {
+        var arr = Array.isArray(ev) ? ev : [];
+        arr.sort(function (a, b) {
+          var da = typeof a.serverTime === "number" ? a.serverTime : new Date(String(a.serverTime || "").replace(" ", "T")).getTime();
+          var db = typeof b.serverTime === "number" ? b.serverTime : new Date(String(b.serverTime || "").replace(" ", "T")).getTime();
+          return (db || 0) - (da || 0);
+        });
+        if (!arr.length) {
+          resultado.innerHTML = '<p class="note">No hay eventos en ese rango de fechas.</p>';
+          return;
+        }
+        var html = '<h3 style="margin:0.5rem 0;font-size:1rem;">Eventos (' + arr.length + ')</h3>';
+        html += '<table class="table-report"><thead><tr><th>Fecha/Hora</th><th>Vehículo</th><th>Tipo</th><th>Geozona</th></tr></thead><tbody>';
+        arr.forEach(function (e) {
+          var nombreV = vehiculoNombre(e.deviceId);
+          var nombreG = geozonaNombre(e.geofenceId);
+          var tipoEtiqueta = { geofenceEnter: "Entró a geozona", geofenceExit: "Salió de geozona", geofence: "Geozona", alarm: "Alarma" }[e.type] || e.type;
+          var claseTipo = e.type === "alarm" ? ' style="color:var(--danger)"' : e.type === "geofenceEnter" ? ' style="color:var(--success)"' : e.type === "geofenceExit" ? ' style="color:var(--warning)"' : "";
+          html += '<tr><td>' + fechaHoraLocal(e.serverTime) + '</td><td>' + esc(nombreV) + '</td><td' + claseTipo + '>' + tipoEtiqueta + '</td><td>' + esc(nombreG || "—") + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        var porTipo = {};
+        arr.forEach(function (e) { porTipo[e.type] = (porTipo[e.type] || 0) + 1; });
+        html += '<h3 style="margin:1rem 0 0.5rem;font-size:1rem;">Resumen por tipo</h3>';
+        html += '<table class="table-report"><thead><tr><th>Tipo</th><th>Cantidad</th></tr></thead><tbody>';
+        Object.keys(porTipo).forEach(function (t) {
+          var label = { geofenceEnter: "Entró a geozona", geofenceExit: "Salió de geozona", geofence: "Geozona", alarm: "Alarma" }[t] || t;
+          html += '<tr><td>' + label + '</td><td>' + porTipo[t] + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        resultado.innerHTML = html;
+      }).catch(function (err) {
+        resultado.innerHTML = '<p class="note">Error al cargar eventos: ' + esc(err.message || "desconocido") + '</p>';
+      });
+      return;
+    }
     Promise.all(vehiculos.map(function (v) {
       return Promise.race([
         llamarApi("/positions?deviceId=" + v.id + "&from=" + desdeIso + "&to=" + hastaIso),
@@ -1979,6 +2023,7 @@
     $("#ultima-actualizacion").textContent = "Actualizado: " + d.toLocaleTimeString("es");
     estadoConexion("ok", "Conectado a " + hostCorto());
     guardarVelocidades();
+    ultimoRefreshCompleto = Date.now();
   }
 
   function pintarEstadisticas() {
@@ -2245,11 +2290,16 @@
   }
 
   function horaLocal(iso) {
-    return new Date(iso).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+    if (!iso && iso !== 0) return "—";
+    var d = typeof iso === "number" ? new Date(iso) : new Date(String(iso).replace(" ", "T"));
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
   }
 
   function fechaHoraLocal(iso) {
-    var d = new Date(iso);
+    if (!iso && iso !== 0) return "—";
+    var d = typeof iso === "number" ? new Date(iso) : new Date(String(iso).replace(" ", "T"));
+    if (isNaN(d.getTime())) return "—";
     var fecha = d.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "2-digit" });
     var hora = d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
     return fecha + ' ' + hora;
@@ -2467,6 +2517,33 @@
     detenerAutoRefresco();
     refrescar();
     temporizador = setInterval(refrescar, config.refreshSec * 1000);
+    iniciarPollingSOS();
+  }
+
+  var temporizadorSOS = null;
+  var pollingSOSActivo = false;
+  var pollingRefrescando = false;
+  var ultimoRefreshCompleto = 0;
+
+  function iniciarPollingSOS() {
+    detenerPollingSOS();
+    pollingSOSActivo = true;
+    temporizadorSOS = setInterval(function () {
+      if (!config.baseUrl || pollingRefrescando || refrescando) return;
+      if (Date.now() - ultimoRefreshCompleto < 5000) return;
+      pollingRefrescando = true;
+      llamarApi("/positions").then(function (posiciones) {
+        if (Array.isArray(posiciones)) detectarSos(posiciones);
+      }).finally(function () { pollingRefrescando = false; });
+    }, 5000);
+  }
+
+  function detenerPollingSOS() {
+    if (temporizadorSOS) {
+      clearInterval(temporizadorSOS);
+      temporizadorSOS = null;
+    }
+    pollingSOSActivo = false;
   }
 
   function detenerAutoRefresco() {
@@ -2474,6 +2551,7 @@
       clearInterval(temporizador);
       temporizador = null;
     }
+    detenerPollingSOS();
   }
 
   var modalConductores = $("#modal-conductores");
