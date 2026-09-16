@@ -88,7 +88,7 @@
           <div class="grid vehicles-grid" id="vehiculos"></div>
         </section>
 
-        <section id="seccion-mapa" style="margin-top: 1.5rem;">
+        <section id="seccion-mapa">
           <div class="cluster section-head">
             <h2>Mapa en vivo</h2>
             <span class="note">Posiciones sobre OpenStreetMap (Leaflet)</span>
@@ -119,7 +119,7 @@
           </div>
         </section>
 
-        <section id="seccion-historial" style="margin-top: 1.5rem;">
+        <section id="seccion-historial">
           <div class="cluster section-head">
             <h2>Historial y reproducción de rutas</h2>
           </div>
@@ -158,7 +158,7 @@
           </div>
         </section>
 
-        <section id="seccion-alarmas" style="margin-top: 1.5rem;">
+        <section id="seccion-alarmas">
           <div class="cluster section-head">
             <h2>Alarmas y eventos</h2>
             <span class="badge badge--neutral" id="alarmas-num">0</span>
@@ -167,7 +167,7 @@
           <div class="card stack-eventos" id="alarmas"></div>
         </section>
 
-        <section id="seccion-reportes" style="margin-top: 1.5rem;">
+        <section id="seccion-reportes">
           <div class="cluster section-head">
             <h2>Reportes</h2>
           </div>
@@ -202,7 +202,7 @@
           </div>
         </section>
 
-        <section id="seccion-geozonas" style="margin-top: 1.5rem;">
+        <section id="seccion-geozonas">
           <div class="cluster section-head">
             <h2>Geozonas</h2>
             <button class="button button--filled" id="btn-nueva-geozona" type="button">+ Nueva geozona</button>
@@ -210,7 +210,7 @@
           <div class="grid geozonas-grid" id="geozonas"></div>
         </section>
 
-        <section id="seccion-pois" style="margin-top: 1.5rem;">
+        <section id="seccion-pois">
           <div class="cluster section-head">
             <h2>Puntos de interés</h2>
             <button class="button button--filled" id="btn-nuevo-poi" type="button">+ Nuevo POI</button>
@@ -218,7 +218,7 @@
           <div class="grid geozonas-grid" id="pois"></div>
         </section>
 
-        <section id="seccion-hospitales" style="margin-top: 1.5rem;">
+        <section id="seccion-hospitales">
           <div class="cluster section-head">
             <h2>Hospitales / IPS</h2>
             <button class="button button--filled" id="btn-toggle-hospitales" type="button">Mostrar en mapa</button>
@@ -230,7 +230,11 @@
             </select>
           </div>
           <p class="note" style="margin-bottom: 0.75rem;">Capa de sedes de salud con cobertura por radio para análisis territorial.</p>
-          <div class="grid geozonas-grid" id="hospitales"></div>
+          <div class="hospital-summary" id="hospital-summary"></div>
+          <div class="hospital-expand" id="hospital-expand" hidden>
+            <div class="grid geozonas-grid" id="hospitales"></div>
+          </div>
+          <button class="button button--outlined" id="btn-expandir-hospitales" type="button" style="margin-top: 0.75rem;">Mostrar todos los hospitales</button>
         </section>
       </main>
     </div>

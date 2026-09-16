@@ -1454,8 +1454,27 @@
   }
 
   function renderHospitales() {
+    var summary = $("#hospital-summary");
     var contenedor = $("#hospitales");
-    if (!contenedor) return;
+    if (!summary || !contenedor) return;
+
+    var tipos = {};
+    var totalCamas = 0;
+    hospitales.forEach(function (h) {
+      tipos[h.tipo] = (tipos[h.tipo] || 0) + 1;
+      totalCamas += parseInt(h.camas) || 0;
+    });
+    var tipoHtml = Object.keys(tipos).map(function (t) {
+      return '<span class="chip">' + esc(t) + ': ' + tipos[t] + '</span>';
+    }).join("");
+
+    summary.innerHTML =
+      '<div class="hospital-summary__stats">' +
+        '<div class="hospital-summary__item"><span class="hospital-summary__value">' + hospitales.length + '</span><span class="hospital-summary__label">Sedes</span></div>' +
+        '<div class="hospital-summary__item"><span class="hospital-summary__value">' + totalCamas.toLocaleString("es-CO") + '</span><span class="hospital-summary__label">Camas</span></div>' +
+      '</div>' +
+      '<div class="cluster" style="gap:0.4rem; margin-top:0.5rem;">' + tipoHtml + '</div>';
+
     contenedor.innerHTML = hospitales.map(function (h) {
       return '<article class="card geozona">' +
         '<div class="geozona__head"><div><h3>🏥 ' + esc(h.nombre) + '</h3>' +
@@ -1471,6 +1490,16 @@
           return '<span class="chip">' + esc(e) + '</span>';
         }).join("") + '</div></div></article>';
     }).join("");
+
+    var expandBtn = $("#btn-expandir-hospitales");
+    var expandSection = $("#hospital-expand");
+    if (expandBtn) {
+      expandBtn.onclick = function () {
+        var visible = !expandSection.hidden;
+        expandSection.hidden = visible;
+        expandBtn.textContent = visible ? "Mostrar todos los hospitales" : "Ocultar hospitales";
+      };
+    }
   }
 
   function rellenarSelectorHistorial() {
@@ -1954,7 +1983,7 @@
     var curso = v.curso !== null ? v.curso + "°" : "—";
     var mapLink = v.tienePosicion ? '<button class="text-link" type="button" data-ver-mapa="' + v.id + '">Ver en mapa</button>' : '<span>Sin coordenadas</span>';
     var sosBadge = v.sos ? '<span class="badge badge--danger badge--sos">SOS ACTIVO</span>' : "";
-    var estadoBadge = v.estado.tipo === "offline" ? "" : '<span class="badge badge--' + clasesBadge[v.estado.tipo] + '">' + v.estado.etiqueta + '</span>';
+    var estadoBadge = v.estado.tipo === "offline" ? "" : '<span class="badge badge--' + clasesBadge[v.estado.tipo] + ' badge--estado">' + v.estado.etiqueta + '</span>';
     var conductor = conductores[v.id] || "";
     var conductorHtml = conductor ? '<span class="badge badge--info">' + esc(conductor) + '</span>' : "";
     var velocidadBadge = "";
@@ -1970,9 +1999,9 @@
     var poiCercano = referencias.length ? '<div class="vehicle__poi-nearby">📍 ' + esc(referencias[0].nombre) + ' a ' + referencias[0].distancia.toFixed(1) + ' km</div>' : '<div class="vehicle__poi-nearby vehicle__poi-nearby--empty">📍 Sin POI</div>';
     return '<article class="card vehicle vehicle--' + v.estado.tipo + '">' +
       '<header class="vehicle__head">' +
-        '<div><h3 class="vehicle__name">' + esc(v.nombre) + '</h3><p class="vehicle__id">ID ' + v.id + ' · ' + esc(v.uniqueId) + '</p></div>' +
+        '<div><h3 class="vehicle__name">' + esc(v.nombre) + '</h3></div>' +
           '<span class="cluster">' +
-          estadoBadge + sosBadge + velocidadBadge + conductorHtml +
+          estadoBadge + sosBadge + velocidadBadge +
         '</span>' +
       '</header>' +
       poiCercano +

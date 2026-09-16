@@ -285,6 +285,12 @@ a {
   justify-content: flex-end;
 }
 
+.page > section + section {
+  border-top: 1px solid var(--border);
+  padding-top: 2rem;
+  margin-top: 0.5rem;
+}
+
 .section-head {
   margin-bottom: 0.75rem;
 }
@@ -492,6 +498,18 @@ a {
 .vehicle__head .cluster {
   justify-content: flex-end;
   max-width: 55%;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+}
+
+.vehicle__head .badge {
+  font-size: 0.65rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.vehicle__head .badge--estado {
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5625rem;
 }
 
 .vehicle__poi-nearby {
@@ -1322,4 +1340,39 @@ a {
 
 .table-report tr:hover td {
   background: var(--primary-light);
+}
+
+.hospital-summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  box-shadow: var(--shadow);
+}
+
+.hospital-summary__stats {
+  display: flex;
+  gap: 2rem;
+}
+
+.hospital-summary__item {
+  display: flex;
+  flex-direction: column;
+}
+
+.hospital-summary__value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.hospital-summary__label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.hospital-expand[hidden] {
+  display: none;
 }
