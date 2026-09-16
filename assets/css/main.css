@@ -481,6 +481,176 @@ a {
 }
 
 .vehicle {
+  padding: 1rem;
+}
+
+.vehicle__head {
+  align-items: flex-start;
+  gap: .75rem;
+}
+
+.vehicle__head .cluster {
+  justify-content: flex-end;
+  max-width: 55%;
+}
+
+.vehicle__poi-nearby {
+  margin: .7rem 0 .55rem;
+  padding: .45rem .6rem;
+  border-radius: .5rem;
+  background: var(--primary-light);
+  color: var(--text);
+  font-size: .78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vehicle__poi-nearby span {
+  color: var(--text-muted);
+}
+
+.vehicle__poi-nearby--empty {
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+
+.vehicle__compact-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: .75rem;
+  padding: .55rem 0;
+}
+
+.vehicle__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  border-top: 1px solid var(--border);
+  padding-top: .65rem;
+}
+
+.vehicle__actions .button {
+  padding: .4rem .65rem;
+  font-size: .75rem;
+}
+
+.vehicle__detail[hidden] {
+  display: none;
+}
+
+.vehicle__detail {
+  border-top: 1px solid var(--border);
+  margin-top: .65rem;
+  padding-top: .75rem;
+}
+
+/* Tarjetas compactas: conserva solo el resumen operativo visible */
+.vehicles-grid {
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.vehicle {
+  padding: .7rem .85rem;
+  gap: .25rem;
+}
+
+.vehicle__name {
+  font-size: .95rem;
+}
+
+.vehicle__id,
+.vehicle__stat-label {
+  font-size: .65rem;
+}
+
+.vehicle__stat-value {
+  font-size: .88rem;
+}
+
+.vehicle__poi-nearby {
+  margin: .35rem 0;
+  padding: .351rem .527rem;
+  font-size: .842rem;
+}
+
+.vehicle__compact-stats {
+  gap: .45rem;
+  padding: .35rem 0;
+}
+
+.vehicle__actions {
+  padding-top: .45rem;
+}
+
+/* Estado visible en el fondo de cada tarjeta */
+.vehicle--moving,
+.vehicle--stopped {
+  background: linear-gradient(135deg, var(--surface) 72%, var(--success-light));
+  box-shadow: 0 8px 22px rgba(22, 163, 74, .14);
+  border-left: 7px solid var(--success);
+  position: relative;
+}
+
+.vehicle--moving::before,
+.vehicle--stopped::before {
+  content: "O\A N\A L\A I\A N\A E";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  z-index: 3;
+  color: #ffffff;
+  background: var(--success);
+  border: 1px solid var(--success);
+  border-radius: 4px;
+  padding: 4px 3px;
+  font-size: .624rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: .9;
+  white-space: pre;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.vehicle--offline::before {
+  content: "O\A F\A F\A L\A I\A N\A E";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  z-index: 3;
+  color: #ffffff;
+  background: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+  padding: 4px 3px;
+  font-size: .624rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: .9;
+  white-space: pre;
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.vehicle--offline {
+  background: linear-gradient(135deg, var(--surface) 72%, var(--danger-light));
+  box-shadow: 0 8px 22px rgba(220, 38, 38, .14);
+  border-left: 7px solid var(--danger);
+  position: relative;
+}
+
+.vehicle--nodata {
+  background: linear-gradient(135deg, var(--surface) 72%, var(--neutral-light));
+  box-shadow: 0 8px 22px rgba(100, 116, 139, .12);
+  border-left: 7px solid var(--neutral);
+  position: relative;
+}
+
+.vehicle {
   padding: 1rem 1.1rem;
   display: flex;
   flex-direction: column;
@@ -488,10 +658,12 @@ a {
   transition: all var(--transition);
 }
 
-.vehicle--moving { border-top: 3px solid var(--success); }
-.vehicle--stopped { border-top: 3px solid var(--info); }
-.vehicle--offline { border-top: 3px solid var(--warning); }
-.vehicle--nodata { border-top: 3px solid var(--neutral); }
+.vehicle--moving,
+.vehicle--stopped,
+.vehicle--offline,
+.vehicle--nodata {
+  border-top: 0;
+}
 
 .vehicle__head {
   display: flex;

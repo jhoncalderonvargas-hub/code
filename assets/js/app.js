@@ -450,6 +450,8 @@
   var ultimaRevision = 0;
   var eventosSos = [];
   var alarmasVistas = {};
+  var sosDetectadoEn = {};
+  var SOS_VISIBLE_MS = 10 * 60 * 1000;
   var filtroActual = { buscar: "", estado: "", conductor: "" };
   var tiempoQuieto = {};
 
@@ -890,8 +892,10 @@
       var alarm = p.attributes && p.attributes.alarm ? String(p.attributes.alarm) : "";
       if (!alarm) {
         alarmasVistas[p.deviceId] = "";
+        delete sosDetectadoEn[p.deviceId];
         return;
       }
+      if (!sosDetectadoEn[p.deviceId]) sosDetectadoEn[p.deviceId] = Date.now();
       if (alarmasVistas[p.deviceId] === alarm) return;
       alarmasVistas[p.deviceId] = alarm;
       var v = buscarVehiculo(p.deviceId);
@@ -1808,7 +1812,13 @@
     var velocidad = p && p.speed ? Math.round(p.speed * 1.852) : 0;
     if (velocidad > 0) registrarVelocidad(d.id, velocidad);
     var encendido = p && p.attributes ? String(p.attributes.ignition) === "true" : null;
-    var sos = p && p.attributes && p.attributes.alarm ? String(p.attributes.alarm) : "";
+    var sosActual = p && p.attributes && p.attributes.alarm ? String(p.attributes.alarm) : "";
+    if (!sosActual) {
+      delete sosDetectadoEn[d.id];
+    } else if (!sosDetectadoEn[d.id]) {
+      sosDetectadoEn[d.id] = Date.now();
+    }
+    var sos = sosActual && Date.now() - sosDetectadoEn[d.id] < SOS_VISIBLE_MS ? sosActual : "";
     var km = typeof distancia === "number" ? distancia / 1000 : null;
     var consumo = consumoVehiculo(d.id);
     var litros = km === null ? null : km * (consumo / 100);
@@ -1944,6 +1954,7 @@
     var curso = v.curso !== null ? v.curso + "°" : "—";
     var mapLink = v.tienePosicion ? '<button class="text-link" type="button" data-ver-mapa="' + v.id + '">Ver en mapa</button>' : '<span>Sin coordenadas</span>';
     var sosBadge = v.sos ? '<span class="badge badge--danger badge--sos">SOS ACTIVO</span>' : "";
+    var estadoBadge = v.estado.tipo === "offline" ? "" : '<span class="badge badge--' + clasesBadge[v.estado.tipo] + '">' + v.estado.etiqueta + '</span>';
     var conductor = conductores[v.id] || "";
     var conductorHtml = conductor ? '<span class="badge badge--info">' + esc(conductor) + '</span>' : "";
     var velocidadBadge = "";
@@ -1955,14 +1966,22 @@
     var velStatsHtml = '<div class="vehicle__stat-speed"><span class="vehicle__stat-label">Máx / Promedio</span><span class="vehicle__stat-value">' + stats.max + ' / ' + stats.promedio + ' km/h</span></div>';
     var tiempoQuietoStr = tiempoQuietoHtml(v.id);
     var refsHtml = v.tienePosicion ? referenciasHtml(v.lat, v.lon) : "";
+    var referencias = v.tienePosicion ? buscarReferenciasCercanas(v.lat, v.lon, 7) : [];
+    var poiCercano = referencias.length ? '<div class="vehicle__poi-nearby">📍 ' + esc(referencias[0].nombre) + ' a ' + referencias[0].distancia.toFixed(1) + ' km</div>' : '<div class="vehicle__poi-nearby vehicle__poi-nearby--empty">📍 Sin POI</div>';
     return '<article class="card vehicle vehicle--' + v.estado.tipo + '">' +
       '<header class="vehicle__head">' +
         '<div><h3 class="vehicle__name">' + esc(v.nombre) + '</h3><p class="vehicle__id">ID ' + v.id + ' · ' + esc(v.uniqueId) + '</p></div>' +
-        '<span class="cluster">' +
-          '<span class="badge badge--' + clasesBadge[v.estado.tipo] + '">' + v.estado.etiqueta + '</span>' + sosBadge + velocidadBadge + conductorHtml +
+          '<span class="cluster">' +
+          estadoBadge + sosBadge + velocidadBadge + conductorHtml +
         '</span>' +
       '</header>' +
-      '<div class="vehicle__stats">' +
+      poiCercano +
+      '<div class="vehicle__compact-stats">' +
+        '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
+        '<div><span class="vehicle__stat-label">Conductor</span><span class="vehicle__stat-value">' + esc(conductor || "Sin asignar") + '</span></div>' +
+      '</div>' +
+      '<div class="vehicle__actions"><button class="button button--outlined" type="button" data-expandir="' + v.id + '" aria-expanded="false">＋ Ver detalles</button>' + (v.tienePosicion ? mapLink : '') + '</div>' +
+      '<div class="vehicle__detail" id="vehicle-detail-' + v.id + '" hidden><div class="vehicle__stats">' +
         '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
         '<div><span class="vehicle__stat-label">Rumbo</span><span class="vehicle__stat-value">' + curso + '</span></div>' +
         '<div><span class="vehicle__stat-label">Encendido</span><span class="vehicle__stat-value">' + enc + '</span></div>' +
@@ -1980,7 +1999,7 @@
       refsHtml +
       '<footer class="vehicle__foot">' +
         '<span>Última señal: ' + hora + '</span>' + mapLink +
-      '</footer>' +
+      '</footer></div>' +
     '</article>';
   }
 
@@ -2412,6 +2431,14 @@
     lista.addEventListener("click", function (e) {
       var b = e.target.closest("[data-ver-mapa]");
       if (b) verEnMapa(parseInt(b.getAttribute("data-ver-mapa"), 10));
+      var expandir = e.target.closest("[data-expandir]");
+      if (expandir) {
+        var detalle = document.getElementById("vehicle-detail-" + expandir.getAttribute("data-expandir"));
+        if (!detalle) return;
+        detalle.hidden = !detalle.hidden;
+        expandir.setAttribute("aria-expanded", String(!detalle.hidden));
+        expandir.textContent = detalle.hidden ? "＋ Ver detalles" : "− Ocultar detalles";
+      }
     });
     lista.addEventListener("change", function (e) {
       var c = e.target.closest("[data-consumo]");
