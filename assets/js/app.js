@@ -451,9 +451,11 @@
   var eventosSos = [];
   var alarmasVistas = {};
   var sosDetectadoEn = {};
+  var sosCounter = 0;
   var SOS_VISIBLE_MS = 10 * 60 * 1000;
   var filtroActual = { buscar: "", estado: "", conductor: "" };
   var tiempoQuieto = {};
+  var distanciasCache = {};
 
   var $ = function (s) { return document.querySelector(s); };
 
@@ -588,7 +590,6 @@
     if (velocidad > h.max) h.max = velocidad;
     h.suma += velocidad;
     h.cuenta++;
-    guardarVelocidades();
   }
 
   function estadisticasVelocidad(id) {
@@ -621,6 +622,11 @@
       op.headers["Content-Type"] = "application/json";
       op.body = JSON.stringify(o.cuerpo);
     }
+    if (typeof AbortController !== "undefined" && !o.sinTimeout) {
+      var ctrl = new AbortController();
+      op.signal = ctrl.signal;
+      setTimeout(function () { ctrl.abort(); }, 15000);
+    }
     return fetch(base + "/api" + ruta, op).then(function (r) {
       if (r.status === 401) throw new Error("Acceso no autorizado (401). Revisa token o credenciales.");
       if (r.status === 403) throw new Error("Sin permisos (403).");
@@ -648,31 +654,63 @@
         }
         var porId = {};
         posiciones.forEach(function (p) { porId[p.deviceId] = p; });
-        return Promise.all(seleccion.map(function (d) {
-          return llamarApi("/reports/route?deviceId=" + d.id + "&from=" + isoInicioHoy() + "&to=" + isoAhora())
-            .then(function (route) {
-              if (!route || route.length < 2) return null;
-              var totalMetros = 0;
-              for (var i = 1; i < route.length; i++) {
-                totalMetros += distanciaKm(route[i - 1].latitude, route[i - 1].longitude, route[i].latitude, route[i].longitude) * 1000;
-              }
-              return totalMetros;
-            })
-            .catch(function () { return null; });
-        })).then(function (distancias) {
-          vehiculos = seleccion.map(function (d, i) {
-            return enriquecer(d, porId[d.id], distancias[i]);
-          });
-          detectarSos(posiciones);
-          return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
-        }).then(function () {
-          mostrarResultados();
+
+        vehiculos = seleccion.map(function (d) {
+          return enriquecer(d, porId[d.id], distanciasCache[d.id] || null);
         });
+        detectarSos(posiciones);
+        return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
+      }).then(function () {
+        mostrarResultados();
+        cargarDistanciasBackground();
       })
       .catch(manejarError)
       .finally(function () {
         refrescando = false;
       });
+  }
+
+  function cargarDistanciasBackground() {
+    var pendientes = vehiculos.filter(function (v) {
+      return !(v.id in distanciasCache);
+    });
+    var total = pendientes.length;
+    var completadas = 0;
+    function cargarSiguiente(idx) {
+      if (idx >= pendientes.length) return;
+      var vId = pendientes[idx].id;
+      llamarApi("/reports/route?deviceId=" + vId + "&from=" + isoInicioHoy() + "&to=" + isoAhora())
+        .then(function (route) {
+          if (route && route.length >= 2) {
+            var totalMetros = 0;
+            for (var i = 1; i < route.length; i++) {
+              totalMetros += distanciaKm(route[i - 1].latitude, route[i - 1].longitude, route[i].latitude, route[i].longitude) * 1000;
+            }
+            distanciasCache[vId] = totalMetros;
+            var actual = null;
+            for (var j = 0; j < vehiculos.length; j++) {
+              if (vehiculos[j].id === vId) { actual = vehiculos[j]; break; }
+            }
+            if (actual) {
+              actual.distancia = totalMetros;
+              var km = totalMetros / 1000;
+              var consumo = consumoVehiculo(vId);
+              actual.litros = km * (consumo / 100);
+              var precio = parseFloat(config.precioCombustible) || 0;
+              actual.costo = actual.litros * precio;
+            }
+          }
+          completadas++;
+          if (completadas === total) pintarEstadisticas();
+          cargarSiguiente(idx + 1);
+        })
+        .catch(function () {
+          completadas++;
+          if (completadas === total) pintarEstadisticas();
+          cargarSiguiente(idx + 1);
+        });
+    }
+    if (pendientes.length) cargarSiguiente(0);
   }
 
   function manejarError(err) {
@@ -711,7 +749,12 @@
           return g;
         });
       })
-      .catch(function () {});
+      .catch(function () {
+        if (!cargarGeozonas._avisado) {
+          cargarGeozonas._avisado = true;
+          mostrarToast("No se pudieron cargar las geozonas.", "info");
+        }
+      });
   }
 
   function vehiculoNombre(id) {
@@ -826,9 +869,17 @@
           var nuevosEnriquecidos = arr.filter(function (e) { return !eventos.some(function (ex) { return ex.id === e.id; }); }).map(enriquecerEvento);
           eventos = nuevosEnriquecidos.concat(eventos).slice(0, 40);
         }
+        var claves = Object.keys(idsVistos);
+        if (claves.length > 200) {
+          claves.slice(0, claves.length - 200).forEach(function (k) { delete idsVistos[k]; });
+        }
         return true;
       })
       .catch(function () {
+        if (!cargarEventos._avisado) {
+          cargarEventos._avisado = true;
+          mostrarToast("No se pudieron cargar los eventos.", "info");
+        }
         return false;
       });
   }
@@ -906,7 +957,7 @@
       var v = buscarVehiculo(p.deviceId);
       var nombre = v ? v.nombre : ("Vehículo " + p.deviceId);
       var ev = {
-        id: "sos-" + p.deviceId + "-" + Date.now(),
+        id: "sos-" + p.deviceId + "-" + Date.now() + "-" + (++sosCounter),
         tipo: "alarm",
         deviceId: p.deviceId,
         vehiculo: nombre,
@@ -927,7 +978,7 @@
         velocidadAnterior[v.id] = v.velocidad;
         return;
       }
-      if (velocidadAnterior[v.id] !== undefined && velocidadAnterior[v.id] <= limite) {
+      if (velocidadAnterior[v.id] === undefined || velocidadAnterior[v.id] <= limite) {
         mostrarToast("¡Exceso de velocidad! " + v.nombre + " a " + v.velocidad + " km/h (límite: " + limite + ")", "error");
       }
       velocidadAnterior[v.id] = v.velocidad;
@@ -1799,21 +1850,31 @@
   }
 
   function exportarCSV() {
-    var tabla = document.querySelector("#reporte-resultado table");
-    if (!tabla) { mostrarToast("Primero generá un reporte.", "error"); return; }
+    var contenedor = document.querySelector("#reporte-resultado");
+    if (!contenedor || !contenedor.querySelector("table")) { mostrarToast("Primero generá un reporte.", "error"); return; }
+    var tablas = contenedor.querySelectorAll("table");
     var csv = "";
-    var filas = tabla.querySelectorAll("tr");
-    filas.forEach(function (fila) {
-      var celdas = fila.querySelectorAll("th, td");
-      var cols = [];
-      celdas.forEach(function (c) { cols.push('"' + c.textContent.replace(/"/g, '""') + '"'); });
-      csv += cols.join(";") + "\n";
+    tablas.forEach(function (tabla, idx) {
+      var titulo = tabla.previousElementSibling;
+      if (titulo && titulo.tagName.match(/^H[2-6]$/)) {
+        csv += "\n" + titulo.textContent + "\n";
+      } else if (idx > 0) {
+        csv += "\n\n";
+      }
+      var filas = tabla.querySelectorAll("tr");
+      filas.forEach(function (fila) {
+        var celdas = fila.querySelectorAll("th, td");
+        var cols = [];
+        celdas.forEach(function (c) { cols.push('"' + c.textContent.replace(/"/g, '""') + '"'); });
+        csv += cols.join(";") + "\n";
+      });
     });
     var blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
     var link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = "reporte_flota_" + new Date().toISOString().slice(0, 10) + ".csv";
     link.click();
+    URL.revokeObjectURL(link.href);
     mostrarToast("CSV exportado.", "success");
   }
 
@@ -1821,6 +1882,7 @@
     var contenido = document.querySelector("#reporte-resultado");
     if (!contenido || !contenido.querySelector("table")) { mostrarToast("Primero generá un reporte.", "error"); return; }
     var w = window.open("", "_blank");
+    if (!w) { mostrarToast("El navegador bloqueó la ventana emergente. Permití popups para este sitio.", "error"); return; }
     w.document.write("<html><head><title>Reporte Flota</title>");
     w.document.write("<style>body{font-family:Arial,sans-serif;padding:2rem;font-size:12px;}");
     w.document.write("table{width:100%;border-collapse:collapse;margin-bottom:1rem;}");
@@ -1916,6 +1978,7 @@
     var d = new Date();
     $("#ultima-actualizacion").textContent = "Actualizado: " + d.toLocaleTimeString("es");
     estadoConexion("ok", "Conectado a " + hostCorto());
+    guardarVelocidades();
   }
 
   function pintarEstadisticas() {
@@ -2000,8 +2063,16 @@
     var stats = estadisticasVelocidad(v.id);
     var velStatsHtml = '<div class="vehicle__stat-speed"><span class="vehicle__stat-label">Máx / Promedio</span><span class="vehicle__stat-value">' + stats.max + ' / ' + stats.promedio + ' km/h</span></div>';
     var tiempoQuietoStr = tiempoQuietoHtml(v.id);
-    var refsHtml = v.tienePosicion ? referenciasHtml(v.lat, v.lon) : "";
     var referencias = v.tienePosicion ? buscarReferenciasCercanas(v.lat, v.lon, 7) : [];
+    var refsHtml = "";
+    if (referencias.length) {
+      refsHtml = '<div class="vehicle__refs"><span class="vehicle__refs-title">📍 Cerca de:</span>';
+      for (var ri = 0; ri < referencias.length && ri < 3; ri++) {
+        var iconoRef = referencias[ri].tipo === "hospital" ? "🏥" : "📌";
+        refsHtml += '<span class="vehicle__ref">' + iconoRef + ' ' + esc(referencias[ri].nombre) + ' (' + referencias[ri].distancia.toFixed(1) + ' km)</span>';
+      }
+      refsHtml += '</div>';
+    }
     var poiCercano = referencias.length ? '<div class="vehicle__poi-nearby">📍 ' + esc(referencias[0].nombre) + ' a ' + referencias[0].distancia.toFixed(1) + ' km</div>' : '<div class="vehicle__poi-nearby vehicle__poi-nearby--empty">📍 Sin POI</div>';
     return '<article class="card vehicle vehicle--' + v.estado.tipo + '">' +
       '<header class="vehicle__head">' +
@@ -2010,7 +2081,7 @@
           estadoBadge + sosBadge + velocidadBadge +
         '</span>' +
       '</header>' +
-      poiCercano +
+      poiCercano + refsHtml +
       '<div class="vehicle__compact-stats">' +
         '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
         '<div><span class="vehicle__stat-label">Conductor</span><span class="vehicle__stat-value">' + esc(conductor || "Sin asignar") + '</span></div>' +
