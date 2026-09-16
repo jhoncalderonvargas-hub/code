@@ -815,15 +815,17 @@
         var nuevos = [];
         if (primera) {
           arr.forEach(function (e) { idsVistos[e.id] = true; });
+          eventos = arr.slice(0, 40).map(enriquecerEvento);
         } else {
           nuevos = arr.filter(function (e) {
             if (idsVistos[e.id]) return false;
             idsVistos[e.id] = true;
             return true;
           }).slice(0, 3);
+          nuevos.forEach(notificarEvento);
+          var nuevosEnriquecidos = arr.filter(function (e) { return !eventos.some(function (ex) { return ex.id === e.id; }); }).map(enriquecerEvento);
+          eventos = nuevosEnriquecidos.concat(eventos).slice(0, 40);
         }
-        nuevos.forEach(notificarEvento);
-        eventos = arr.slice(0, 40).map(enriquecerEvento);
         return true;
       })
       .catch(function () {
@@ -844,6 +846,9 @@
   function renderAlarmas() {
     var contenedor = $("#alarmas");
     var total = $("#alarmas-num");
+    var dosHorasAtras = Date.now() - 2 * 60 * 60 * 1000;
+    eventos = eventos.filter(function (e) { return new Date(e.hora).getTime() > dosHorasAtras; });
+    eventosSos = eventosSos.filter(function (e) { return new Date(e.hora).getTime() > dosHorasAtras; });
     var lista = eventosSos.concat(eventos);
     if (!lista.length) {
       contenedor.innerHTML = '<div class="vacio"><p><strong>Sin alarmas registradas.</strong></p><p class="note" style="margin-top:0.25rem;">Las alarmas SOS de los dispositivos, y las entradas/salidas de geozonas, aparecerán aquí en tiempo real.</p></div>';
@@ -871,7 +876,7 @@
     return '<div class="evento' + (e.tipo === "alarm" ? " evento--alarma" : "") + '">' +
       encabezado +
       '<span>' + esc(texto) + '</span>' +
-      '<span class="evento__time" title="' + (e.hora ? esc(horaLocal(e.hora)) : "") + '">' + (e.hora ? desdeHace(e.hora) : "") + '</span>' +
+      '<span class="evento__time" title="' + (e.hora ? esc(fechaHoraLocal(e.hora)) : "") + '">' + (e.hora ? desdeHace(e.hora) + ' · ' + fechaHoraLocal(e.hora) : "") + '</span>' +
     '</div>';
   }
 
@@ -2010,26 +2015,7 @@
         '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
         '<div><span class="vehicle__stat-label">Conductor</span><span class="vehicle__stat-value">' + esc(conductor || "Sin asignar") + '</span></div>' +
       '</div>' +
-      '<div class="vehicle__actions"><button class="button button--outlined" type="button" data-expandir="' + v.id + '" aria-expanded="false">＋ Ver detalles</button>' + (v.tienePosicion ? mapLink : '') + '</div>' +
-      '<div class="vehicle__detail" id="vehicle-detail-' + v.id + '" hidden><div class="vehicle__stats">' +
-        '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
-        '<div><span class="vehicle__stat-label">Rumbo</span><span class="vehicle__stat-value">' + curso + '</span></div>' +
-        '<div><span class="vehicle__stat-label">Encendido</span><span class="vehicle__stat-value">' + enc + '</span></div>' +
-        '<div><span class="vehicle__stat-label">Dist. hoy</span><span class="vehicle__stat-value">' + dist + '</span></div>' +
-        '<div><span class="vehicle__stat-label">Combustible</span><span class="vehicle__stat-value">' + combust + '</span></div>' +
-        velStatsHtml +
-        '<div class="field vehicle__consumo"><label for="cons-' + v.id + '">Consumo L/100km</label><input id="cons-' + v.id + '" type="number" min="0.5" step="0.1" value="' + v.consumo + '" data-consumo="' + v.id + '"></div>' +
-      '</div>' +
-      '<dl class="vehicle__meta">' +
-        '<div><dt>Conductor</dt><dd><select class="conductor-select" data-conductor="' + v.id + '"><option value="">Sin asignar</option></select></dd></div>' +
-        '<div><dt>Tiempo quieto</dt><dd>' + tiempoQuietoStr + '</dd></div>' +
-        '<div><dt>Coordenadas</dt><dd>' + coords + '</dd></div>' +
-        '<div><dt>Dirección</dt><dd>' + esc(direccion) + '</dd></div>' +
-      '</dl>' +
-      refsHtml +
-      '<footer class="vehicle__foot">' +
-        '<span>Última señal: ' + hora + '</span>' + mapLink +
-      '</footer></div>' +
+      '<div class="vehicle__actions"><button class="button button--outlined" type="button" data-abrir-modal-vehiculo="' + v.id + '">＋ Ver detalles</button>' + (v.tienePosicion ? mapLink : '') + '</div>' +
     '</article>';
   }
 
@@ -2280,6 +2266,52 @@
     $("#resultado-prueba").innerHTML = "";
   }
 
+  function abrirModalVehiculo(id) {
+    var v = vehiculos.find(function (veh) { return veh.id === id; });
+    if (!v) return;
+    var modalV = $("#modal-vehiculo");
+    var body = $("#modal-vehiculo-body");
+    var conductor = conductores[v.id] || "";
+    var coords = v.tienePosicion ? v.lat.toFixed(5) + ", " + v.lon.toFixed(5) : "—";
+    var direccion = v.direccion || (v.tienePosicion ? "Sin dirección registrada" : "Sin posición");
+    var hora = v.hora ? desdeHace(v.hora) + " · " + horaLocal(v.hora) : "—";
+    var curso = v.curso !== null ? v.curso + "°" : "—";
+    var enc = v.encendido ? "Sí" : "No";
+    var dist = v.distancia !== null ? (v.distancia / 1000).toFixed(1) + " km" : "—";
+    var combust = v.litros === null
+      ? "—"
+      : v.litros.toLocaleString("es", { maximumFractionDigits: 1 }) + " L" + (v.costo === null ? "" : " · $ " + Math.round(v.costo).toLocaleString("es-CO"));
+    var stats = estadisticasVelocidad(v.id);
+    var tiempoQuietoStr = tiempoQuietoHtml(v.id);
+    var referencias = v.tienePosicion ? buscarReferenciasCercanas(v.lat, v.lon, 7) : [];
+    var refsHtml = referencias.length ? '<div class="vehicle__refs"><span class="vehicle__refs-title">Referencias cercanas:</span>' +
+      referencias.map(function (r) { return '<span class="vehicle__ref">' + esc(r.nombre) + ' (' + r.distancia.toFixed(1) + ' km)</span>'; }).join("") + '</div>' : "";
+
+    $("#modal-vehiculo-titulo").textContent = esc(v.nombre);
+    body.innerHTML =
+      '<div class="vehiculo-modal-grid">' +
+        '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
+        '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Rumbo</span><span class="vehicle__stat-value">' + curso + '</span></div>' +
+        '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Encendido</span><span class="vehicle__stat-value">' + enc + '</span></div>' +
+        '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Dist. hoy</span><span class="vehicle__stat-value">' + dist + '</span></div>' +
+        '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Combustible</span><span class="vehicle__stat-value">' + combust + '</span></div>' +
+        '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Vel. máx / prom</span><span class="vehicle__stat-value">' + stats.max + ' / ' + stats.promedio + ' km/h</span></div>' +
+      '</div>' +
+      '<dl class="vehicle__meta" style="margin-top:1rem;">' +
+        '<div><dt>Conductor</dt><dd>' + esc(conductor || "Sin asignar") + '</dd></div>' +
+        '<div><dt>Tiempo quieto</dt><dd>' + tiempoQuietoStr + '</dd></div>' +
+        '<div><dt>Coordenadas</dt><dd>' + coords + '</dd></div>' +
+        '<div><dt>Dirección</dt><dd>' + esc(direccion) + '</dd></div>' +
+        '<div><dt>Última señal</dt><dd>' + hora + '</dd></div>' +
+      '</dl>' +
+      refsHtml;
+    modalV.hidden = false;
+  }
+
+  function cerrarModalVehiculo() {
+    $("#modal-vehiculo").hidden = true;
+  }
+
   function rellenarModal() {
     $("#cfg-base").value = config.baseUrl;
     $("#cfg-metodo").value = config.authType;
@@ -2468,14 +2500,8 @@
     lista.addEventListener("click", function (e) {
       var b = e.target.closest("[data-ver-mapa]");
       if (b) verEnMapa(parseInt(b.getAttribute("data-ver-mapa"), 10));
-      var expandir = e.target.closest("[data-expandir]");
-      if (expandir) {
-        var detalle = document.getElementById("vehicle-detail-" + expandir.getAttribute("data-expandir"));
-        if (!detalle) return;
-        detalle.hidden = !detalle.hidden;
-        expandir.setAttribute("aria-expanded", String(!detalle.hidden));
-        expandir.textContent = detalle.hidden ? "＋ Ver detalles" : "− Ocultar detalles";
-      }
+      var btnModal = e.target.closest("[data-abrir-modal-vehiculo]");
+      if (btnModal) abrirModalVehiculo(parseInt(btnModal.getAttribute("data-abrir-modal-vehiculo"), 10));
     });
     lista.addEventListener("change", function (e) {
       var c = e.target.closest("[data-consumo]");
@@ -2569,6 +2595,7 @@
     $("#btn-limpiar-alarmas").addEventListener("click", function () {
       eventos = [];
       eventosSos = [];
+      idsVistos = {};
       renderAlarmas();
     });
 
@@ -2629,6 +2656,11 @@
     $("#form-hospital").addEventListener("submit", guardarHospital);
     modalHospital.addEventListener("click", function (e) {
       if (e.target === modalHospital) cerrarModalHospital();
+    });
+
+    $("#vehiculo-cerrar").addEventListener("click", cerrarModalVehiculo);
+    $("#modal-vehiculo").addEventListener("click", function (e) {
+      if (e.target === $("#modal-vehiculo")) cerrarModalVehiculo();
     });
 
     var mapaEl = document.getElementById("mapa");
