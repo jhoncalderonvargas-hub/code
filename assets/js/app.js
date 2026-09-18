@@ -645,6 +645,7 @@
       .then(function (res) {
         var dispositivos = res[0];
         var posiciones = res[1];
+        ultimasPosiciones = posiciones;
         var seleccion = dispositivos.slice();
         if (config.deviceIds.length) {
           seleccion = seleccion.filter(function (d) {
@@ -661,7 +662,7 @@
         return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
       }).then(function () {
         mostrarResultados();
-        cargarDistanciasBackground();
+        calcularDistanciasDePosiciones();
       })
       .catch(manejarError)
       .finally(function () {
@@ -669,47 +670,36 @@
       });
   }
 
-  function cargarDistanciasBackground() {
-    var pendientes = vehiculos.filter(function (v) {
-      return !(v.id in distanciasCache);
+  var ultimasPosiciones = [];
+
+  function calcularDistanciasDePosiciones() {
+    var posicionesPorDispositivo = {};
+    ultimasPosiciones.forEach(function (p) {
+      if (!posicionesPorDispositivo[p.deviceId]) {
+        posicionesPorDispositivo[p.deviceId] = [];
+      }
+      posicionesPorDispositivo[p.deviceId].push(p);
     });
-    var total = pendientes.length;
-    var completadas = 0;
-    function cargarSiguiente(idx) {
-      if (idx >= pendientes.length) return;
-      var vId = pendientes[idx].id;
-      llamarApi("/reports/route?deviceId=" + vId + "&from=" + isoInicioHoy() + "&to=" + isoAhora())
-        .then(function (route) {
-          if (route && route.length >= 2) {
-            var totalMetros = 0;
-            for (var i = 1; i < route.length; i++) {
-              totalMetros += distanciaKm(route[i - 1].latitude, route[i - 1].longitude, route[i].latitude, route[i].longitude) * 1000;
-            }
-            distanciasCache[vId] = totalMetros;
-            var actual = null;
-            for (var j = 0; j < vehiculos.length; j++) {
-              if (vehiculos[j].id === vId) { actual = vehiculos[j]; break; }
-            }
-            if (actual) {
-              actual.distancia = totalMetros;
-              var km = totalMetros / 1000;
-              var consumo = consumoVehiculo(vId);
-              actual.litros = km * (consumo / 100);
-              var precio = parseFloat(config.precioCombustible) || 0;
-              actual.costo = actual.litros * precio;
-            }
-          }
-          completadas++;
-          if (completadas === total) pintarEstadisticas();
-          cargarSiguiente(idx + 1);
-        })
-        .catch(function () {
-          completadas++;
-          if (completadas === total) pintarEstadisticas();
-          cargarSiguiente(idx + 1);
-        });
-    }
-    if (pendientes.length) cargarSiguiente(0);
+    vehiculos.forEach(function (v) {
+      if (v.id in distanciasCache) return;
+      var posiciones = posicionesPorDispositivo[v.id];
+      if (!posiciones || posiciones.length < 2) return;
+      posiciones.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
+      var totalMetros = 0;
+      for (var i = 1; i < posiciones.length; i++) {
+        totalMetros += distanciaKm(posiciones[i - 1].latitude, posiciones[i - 1].longitude, posiciones[i].latitude, posiciones[i].longitude) * 1000;
+      }
+      if (totalMetros > 0) {
+        distanciasCache[v.id] = totalMetros;
+        v.distancia = totalMetros;
+        var km = totalMetros / 1000;
+        var consumo = consumoVehiculo(v.id);
+        v.litros = km * (consumo / 100);
+        var precio = parseFloat(config.precioCombustible) || 0;
+        v.costo = v.litros * precio;
+      }
+    });
+    pintarEstadisticas();
   }
 
   function manejarError(err) {
@@ -2203,7 +2193,9 @@
       refsHtml = '<div class="vehicle__refs"><span class="vehicle__refs-title">📍 Cerca de:</span>';
       for (var ri = 0; ri < referencias.length && ri < 2; ri++) {
         var iconoRef = referencias[ri].tipo === "hospital" ? "🏥" : "📌";
-        refsHtml += '<span class="vehicle__ref">' + iconoRef + ' ' + esc(referencias[ri].nombre) + ' (' + referencias[ri].distancia.toFixed(1) + ' km)</span>';
+        var nombre = referencias[ri].nombre;
+        if (nombre.length > 25) nombre = nombre.substring(0, 25) + "...";
+        refsHtml += '<span class="vehicle__ref">' + iconoRef + ' <span class="vehicle__ref-name">' + esc(nombre) + '</span> <span class="vehicle__ref-dist">(' + referencias[ri].distancia.toFixed(1) + ' km)</span></span>';
       }
       refsHtml += '</div>';
     }

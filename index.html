@@ -21,21 +21,23 @@
         <span class="avatar" aria-hidden="true">OP</span>
         <span><strong>Operador de flota</strong><span class="user-summary__meta">Administrador</span></span>
       </div>
+      <div class="topbar__flash topbar__flash--1"></div>
+      <div class="topbar__flash topbar__flash--2"></div>
     </header>
 
     <div class="app-body">
       <aside class="sidebar" aria-label="Navegación principal">
         <nav>
           <ul class="nav-list">
-            <li><a class="nav-link" href="#panel" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span>Panel</a></li>
-            <li><a class="nav-link" href="#seccion-vehiculos"><span class="nav-icon" aria-hidden="true">◈</span>Vehículos</a></li>
-            <li><a class="nav-link" href="#seccion-mapa"><span class="nav-icon" aria-hidden="true">⌖</span>Mapa</a></li>
-            <li><a class="nav-link" href="#seccion-historial"><span class="nav-icon" aria-hidden="true">▶</span>Historial</a></li>
-            <li><a class="nav-link" href="#seccion-alarmas"><span class="nav-icon" aria-hidden="true">⚠</span>Alarmas</a></li>
-            <li><a class="nav-link" href="#seccion-reportes"><span class="nav-icon" aria-hidden="true">📊</span>Reportes</a></li>
-            <li><a class="nav-link" href="#seccion-geozonas"><span class="nav-icon" aria-hidden="true">◎</span>Geozonas</a></li>
+            <li><a class="nav-link" href="#panel" aria-current="page"><span class="nav-icon" aria-hidden="true">📊</span>Panel</a></li>
+            <li><a class="nav-link" href="#seccion-vehiculos"><span class="nav-icon" aria-hidden="true">🚗</span>Vehículos</a></li>
+            <li><a class="nav-link" href="#seccion-mapa"><span class="nav-icon" aria-hidden="true">🗺️</span>Mapa</a></li>
+            <li><a class="nav-link" href="#seccion-historial"><span class="nav-icon" aria-hidden="true">🛣️</span>Historial</a></li>
+            <li><a class="nav-link" href="#seccion-alarmas"><span class="nav-icon" aria-hidden="true">🔔</span>Alarmas</a></li>
+            <li><a class="nav-link" href="#seccion-reportes"><span class="nav-icon" aria-hidden="true">📋</span>Reportes</a></li>
+            <li><a class="nav-link" href="#seccion-geozonas"><span class="nav-icon" aria-hidden="true">📍</span>Geozonas</a></li>
             <li><a class="nav-link" href="#seccion-hospitales"><span class="nav-icon" aria-hidden="true">🏥</span>Hospitales</a></li>
-            <li><a class="nav-link" href="#" data-abrir-configuracion><span class="nav-icon" aria-hidden="true">⚙</span>Configuración</a></li>
+            <li><a class="nav-link" href="#" data-abrir-configuracion><span class="nav-icon" aria-hidden="true">⚙️</span>Configuración</a></li>
             <li><a class="nav-link" href="#" id="btn-abrir-conductores"><span class="nav-icon" aria-hidden="true">👤</span>Conductores</a></li>
           </ul>
         </nav>
@@ -45,7 +47,6 @@
         <header class="page-header" id="panel">
           <div>
             <h1>Panel de flota</h1>
-            <p class="page-description">Monitoreo en tiempo real de tus vehículos registrados en Traccar.</p>
           </div>
           <div class="cluster cluster--center">
             <span class="conexion conexion--wait" id="conexion" aria-live="polite"><span class="conexion__dot"></span><span id="conexion-texto">Iniciando…</span></span>
@@ -91,7 +92,6 @@
         <section id="seccion-mapa">
           <div class="cluster section-head">
             <h2>Mapa en vivo</h2>
-            <span class="note">Posiciones sobre OpenStreetMap (Leaflet)</span>
           </div>
           <div class="map-wrap">
             <div id="mapa" role="application" aria-label="Mapa con las posiciones de la flota"></div>
