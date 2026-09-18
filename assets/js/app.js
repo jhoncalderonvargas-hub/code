@@ -1608,13 +1608,52 @@
     }).join("");
     if (rellenarSelectorHistorial._inicializado) return;
     rellenarSelectorHistorial._inicializado = true;
+    var rango = $("#hist-rango").value;
+    if (rango && rango !== "personalizado") {
+      aplicarRangoHistorial(rango);
+    }
+  }
+
+  function fechaLocalInput(fecha) {
+    var y = fecha.getFullYear();
+    var m = String(fecha.getMonth() + 1).padStart(2, "0");
+    var d = String(fecha.getDate()).padStart(2, "0");
+    var h = String(fecha.getHours()).padStart(2, "0");
+    var min = String(fecha.getMinutes()).padStart(2, "0");
+    return y + "-" + m + "-" + d + "T" + h + ":" + min;
+  }
+
+  function aplicarRangoHistorial(rango) {
     var ahora = new Date();
-    var hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
-    $("#hist-desde").value = hoyInicio.toISOString().slice(0, 16);
-    $("#hist-hasta").value = ahora.toISOString().slice(0, 16);
-    var haceDia = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
-    $("#rep-desde").value = haceDia.toISOString().slice(0, 16);
-    $("#rep-hasta").value = ahora.toISOString().slice(0, 16);
+    var desde, hasta;
+    if (rango === "hoy") {
+      desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
+      hasta = ahora;
+    } else if (rango === "ayer") {
+      hasta = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
+      desde = new Date(hasta.getTime() - 24 * 60 * 60 * 1000);
+    } else if (rango === "hoy-24h") {
+      hasta = ahora;
+      desde = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
+    } else if (rango === "esta-semana") {
+      var diaSemana = ahora.getDay() || 7;
+      desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - diaSemana + 1, 0, 0, 0);
+      hasta = ahora;
+    } else if (rango === "semana-pasada") {
+      var diaSemana2 = ahora.getDay() || 7;
+      hasta = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - diaSemana2 + 1, 0, 0, 0);
+      desde = new Date(hasta.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else if (rango === "este-mes") {
+      desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0);
+      hasta = ahora;
+    } else if (rango === "mes-pasado") {
+      hasta = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0);
+      desde = new Date(hasta.getFullYear(), hasta.getMonth() - 1, 1, 0, 0, 0);
+    } else {
+      return;
+    }
+    if (desde) $("#hist-desde").value = fechaLocalInput(desde);
+    if (hasta) $("#hist-hasta").value = fechaLocalInput(hasta);
   }
 
   function limpiarHistorial() {
@@ -2955,38 +2994,8 @@
 
     $("#hist-rango").addEventListener("change", function () {
       var rango = this.value;
-      var ahora = new Date();
-      var desde, hasta;
-
-      if (rango === "hoy") {
-        desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
-        hasta = ahora;
-      } else if (rango === "ayer") {
-        hasta = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate(), 0, 0, 0);
-        desde = new Date(hasta.getTime() - 24 * 60 * 60 * 1000);
-      } else if (rango === "hoy-24h") {
-        hasta = ahora;
-        desde = new Date(ahora.getTime() - 24 * 60 * 60 * 1000);
-      } else if (rango === "esta-semana") {
-        var diaSemana = ahora.getDay() || 7;
-        desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - diaSemana + 1, 0, 0, 0);
-        hasta = ahora;
-      } else if (rango === "semana-pasada") {
-        var diaSemana2 = ahora.getDay() || 7;
-        hasta = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - diaSemana2 + 1, 0, 0, 0);
-        desde = new Date(hasta.getTime() - 7 * 24 * 60 * 60 * 1000);
-      } else if (rango === "este-mes") {
-        desde = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0);
-        hasta = ahora;
-      } else if (rango === "mes-pasado") {
-        hasta = new Date(ahora.getFullYear(), ahora.getMonth(), 1, 0, 0, 0);
-        desde = new Date(hasta.getFullYear(), hasta.getMonth() - 1, 1, 0, 0, 0);
-      } else {
-        return;
-      }
-
-      if (desde) $("#hist-desde").value = desde.toISOString().slice(0, 16);
-      if (hasta) $("#hist-hasta").value = hasta.toISOString().slice(0, 16);
+      if (rango === "personalizado") return;
+      aplicarRangoHistorial(rango);
     });
 
     $("#btn-generar-reporte").addEventListener("click", generarReporte);
