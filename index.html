@@ -124,10 +124,23 @@
             <h2>Historial y reproducción de rutas</h2>
           </div>
           <div class="card" style="padding: 1rem;">
-            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr auto; align-items: end; gap: 0.75rem;">
+            <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr auto; align-items: end; gap: 0.75rem;">
               <div class="field">
                 <label for="hist-vehiculo">Vehículo</label>
                 <select id="hist-vehiculo"></select>
+              </div>
+              <div class="field">
+                <label for="hist-rango">Rango</label>
+                <select id="hist-rango">
+                  <option value="personalizado">Personalizado</option>
+                  <option value="hoy" selected>Hoy</option>
+                  <option value="ayer">Ayer</option>
+                  <option value="hoy-24h">Últimas 24 horas</option>
+                  <option value="esta-semana">Esta semana</option>
+                  <option value="semana-pasada">Semana pasada</option>
+                  <option value="este-mes">Este mes</option>
+                  <option value="mes-pasado">Mes pasado</option>
+                </select>
               </div>
               <div class="field">
                 <label for="hist-desde">Desde</label>
@@ -148,7 +161,8 @@
                 <select id="pb-velocidad" class="filtro-select" style="width:auto;">
                   <option value="1">1x</option>
                   <option value="2">2x</option>
-                  <option value="5" selected>5x</option>
+                  <option value="3" selected>3x</option>
+                  <option value="5">5x</option>
                   <option value="10">10x</option>
                   <option value="20">20x</option>
                 </select>

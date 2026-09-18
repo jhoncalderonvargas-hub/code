@@ -212,15 +212,15 @@ var CONFIG_POR_DEFECTO = {
 - `renderHospitales()`: Genera resumen (sedes, camas, tipos) + lista expandible
 
 #### Funciones de tiempo
-- `horaLocal(iso)`: HH:MM
-- `fechaHoraLocal(iso)`: DD/MM/YY HH:MM
+- `horaLocal(iso)`: HH:MM — maneja string ISO, string sin T, y timestamp numérico
+- `fechaHoraLocal(iso)`: DD/MM/YY HH:MM — fallback a "—" si fecha inválida
 - `desdeHace(iso)`: "hace X min/horas"
 - `tiempoQuietoHtml(id)`: Tiempo que lleva detenido un vehículo
 
 #### Velocidad
-- `registrarVelocidad(id, vel)`: Acumula máx y promedio en `historialVelocidades`
+- `registrarVelocidad(id, vel)`: Acumula máx y promedio en `historialVelocidades` (sin guardar en localStorage por cada llamada — se guarda una vez en `mostrarResultados()`)
 - `estadisticasVelocidad(id)`: Retorna `{ max, promedio }`
-- `detectarExcesoVelocidad()`: Toast si supera `config.limiteVelocidad`
+- `detectarExcesoVelocidad()`: Toast si supera `config.limiteVelocidad` — detecta también en primera carga
 
 #### Mapa
 - `inicializarMapa()`: Leaflet con OpenStreetMap
@@ -229,8 +229,10 @@ var CONFIG_POR_DEFECTO = {
 - Marcadores de geozonas (círculos), POIs (divIcon con emoji), hospitales, cobertura
 
 #### Geozonas
-- Persistencia en localStorage
+- CRUD completo via API Traccar (POST crear, PUT editar, DELETE eliminar)
 - Crear con modal o dibujar en mapa
+- Editar: click "Editar" → modal con datos actuales → PUT con `{id, name, description, area}`
+- Eliminar con confirmación → DELETE `/geofences/:id`
 - Dibujar como `L.circle` en mapa
 - Toggle de visibilidad por capa
 
@@ -258,15 +260,30 @@ var CONFIG_POR_DEFECTO = {
 - Barra de reproducción con velocidad ajustable (1x-20x)
 
 #### Reportes
-- 4 tipos: resumen, trayectos, velocidad, paradas
+- 5 tipos: resumen, trayectos, velocidad, paradas, **eventos**
+- **Eventos**: Llama a `/reports/events` (sin filtro de tipo), tabla con Fecha/Hora, Vehículo, Tipo (con colores), Geozona (solo si hay eventos geofence). Incluye resumen por tipo. Usa campo `eventTime` de Traccar.
 - **Trayectos**: Tabla con #, Inicio (fecha+hora), Fin (fecha+hora), Duración, Distancia, Vel máx/prom, Paradas
-- Exportación a CSV
+- Exportación a CSV (todas las tablas) y PDF
 
-#### Alarms y Eventos
+#### Alarmas y Eventos
 - `cargarEventos()`: Consulta API `/reports/events`, **acumula** eventos nuevos sin reemplazar
 - `eventosSos`: Detectados de `attributes.alarm` en posiciones
 - Filtrado automático: eventos > 2 horas se eliminan en cada render
+- `renderAlarmas()` se llama inmediatamente al agregar eventos (toast y sección sincronizados)
+- `idsVistos` se limpia a 200 entradas máximo para evitar memory leak
 - Botón "Limpiar": Resetea `eventos`, `eventosSos` e `idsVistos`
+
+#### SOS Polling
+- Polling separado cada 5s que llama a `/positions` solo para detectar alarmas SOS
+- Se salta si el refresh principal está corriendo o si terminó hace menos de 5s
+- Reduce latencia de SOS de ~22s a ~8s
+
+#### Rendimiento
+- `refrescar()`: Camino crítico (devices+positions+geozonas+eventos → render ~3-4s)
+- `cargarDistanciasBackground()`: Secuencial por vehículo, solo los no cacheados, busca vehículo actual por ID (no referencia stale)
+- `distanciasCache`: Almacena distancias para no re-fetch en refreshes posteriores
+- `registrarVelocidad()`: No guarda localStorage por cada vehículo — se guarda una vez al final en `mostrarResultados()`
+- `llamarApi()`: Timeout de 15s via `AbortController`
 
 #### Notificaciones
 - `mostrarToast(msg, tipo)`: Muestra toast con auto-hide
@@ -417,19 +434,21 @@ lng: -75.5812
 ## Funcionalidades Clave
 
 1. **Conexión**: Token Bearer o Basic Auth, proxy evita CORS, polling configurable
-2. **Tarjetas**: Estado visual (borde + gradiente + badge), POI cercano, velocidad, conductor
+2. **Tarjetas**: Estado visual (borde + gradiente + badge), POI cercano, referencias, velocidad, conductor
 3. **Modal detalles**: Grid 3 columnas, stats completos, metadata, referencias cercanas, no se cierra con refresh
 4. **Mapa**: Marcadores coloreados, geozonas, POIs, hospitales con cobertura, polylíneas de ruta
-5. **Geozonas**: Crear con modal o dibujar en mapa, persistencia
+5. **Geozonas**: CRUD via Traccar API (crear/editar/eliminar), dibujar en mapa
 6. **POIs**: 6 tipos con iconos, persistencia
 7. **Conductores**: CRUD, asignación a vehículos, persistencia
 8. **Historial**: Ruta con reproducción animada (play/pause, velocidad 1x-20x)
-9. **Reportes**: 4 tipos, exportación CSV, fechas por trayecto
-10. **Alarmas**: Acumulación entre refreshes, auto-eliminación > 2h, SOS con toast
-11. **Hospitales**: Resumen compacto expandible, cobertura por radio
-12. **Modo oscuro**: Toggle con persistencia
-13. **Filtros**: Por nombre, estado, conductor
-14. **Responsive**: Desktop y móvil
+9. **Reportes**: 5 tipos (resumen/trayectos/velocidad/paradas/eventos), exportación CSV/PDF
+10. **Alarmas**: Acumulación entre refreshes, auto-eliminación > 2h, SOS con toast, render sincronizado
+11. **SOS Polling**: Detección rápida (~8s) via polling separado cada 5s
+12. **Hospitales**: Resumen compacto expandible, cobertura por radio
+13. **Modo oscuro**: Toggle con persistencia
+14. **Filtros**: Por nombre, estado, conductor
+15. **Responsive**: Desktop y móvil
+16. **Rendimiento**: Distancias en background, cache, localStorage batch, timeout API 15s
 
 ---
 
