@@ -193,16 +193,16 @@ a {
 }
 
 .brand__pin {
-  animation: giroTrompo 4s ease-in-out infinite;
+  animation: giroTrompo 8s ease-in-out infinite;
   transform-origin: 64px 62px;
 }
 
 @keyframes giroTrompo {
-  0%, 100% { transform: scale(1.1) rotateY(0deg); }
-  4% { transform: scale(1.1) rotateY(1800deg); }
-  25% { transform: scale(1.1) rotateY(1800deg); }
-  29% { transform: scale(1.1) rotateY(3600deg); }
-  50% { transform: scale(1.1) rotateY(3600deg); }
+  0% { transform: scale(1.05) rotateY(0deg); }
+  5% { transform: scale(1.05) rotateY(360deg); }
+  50% { transform: scale(1.05) rotateY(360deg); }
+  55% { transform: scale(1.05) rotateY(0deg); }
+  100% { transform: scale(1.05) rotateY(0deg); }
 }
 
 .brand:hover .brand__icon {
