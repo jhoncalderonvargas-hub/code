@@ -8,6 +8,7 @@
   var CLAVE_MODO_OSCURO = "flota_modo_oscuro";
   var CLAVE_POIS = "flota_pois";
   var CLAVE_HOSPITALES_EDITADOS = "flota_hospitales_editados";
+  var CLAVE_MAPA_OSCURO = "flota_mapa_oscuro";
 
   var CONFIG_POR_DEFECTO = {
     baseUrl: "http://localhost:3000",
@@ -2291,12 +2292,33 @@
     });
   }
 
+  var mapaClaro = null;
+  var mapaOscuro = false;
+  var mapaActual = "claro";
+
   function inicializarMapa() {
     mapa = L.map("mapa").setView([4.6990, -74.0830], 12);
-    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    mapaClaro = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19
     }).addTo(mapa);
+    var guardado = localStorage.getItem(CLAVE_MAPA_OSCURO);
+    if (guardado === "true") {
+      document.getElementById("mapa").classList.add("mapa-dark");
+      mapaOscuro = true;
+    }
+  }
+
+  function alternarMapaOscuro(activo) {
+    if (!mapa) return;
+    var mapaEl = document.getElementById("mapa");
+    if (activo) {
+      mapaEl.classList.add("mapa-dark");
+    } else {
+      mapaEl.classList.remove("mapa-dark");
+    }
+    mapaOscuro = activo;
+    localStorage.setItem(CLAVE_MAPA_OSCURO, activo);
   }
 
   function colorEstado(tipo) {
@@ -2975,6 +2997,15 @@
         });
       }
     });
+
+    var mapaOscuroCheck = document.getElementById("layer-mapa-oscuro");
+    if (mapaOscuroCheck) {
+      var guardadoOscuro = localStorage.getItem(CLAVE_MAPA_OSCURO);
+      if (guardadoOscuro === "true") mapaOscuroCheck.checked = true;
+      mapaOscuroCheck.addEventListener("change", function () {
+        alternarMapaOscuro(this.checked);
+      });
+    }
 
     document.getElementById("hospitales").addEventListener("click", function (e) {
       var btn = e.target.closest("[data-ver-hospital]");

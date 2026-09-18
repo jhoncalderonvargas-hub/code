@@ -1079,6 +1079,10 @@ a {
   height: 100%;
 }
 
+.mapa-dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.8) contrast(1.1) saturate(0.3);
+}
+
 .map-wrap .mapa-offline {
   height: 100%;
   display: flex;
