@@ -135,7 +135,7 @@ a {
   left: -55%;
   width: 55%;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  background: linear-gradient(90deg, transparent 0%, var(--primary) 30%, var(--primary) 70%, transparent 100%);
   filter: blur(2px);
   box-shadow: 0 0 6px var(--primary);
   border-radius: 2px;
@@ -185,11 +185,24 @@ a {
 }
 
 .brand__icon {
-  width: 40px;
-  height: 40px;
+  width: 46px;
+  height: 46px;
   border-radius: 10px;
   flex-shrink: 0;
   transition: all 0.3s ease;
+}
+
+.brand__pin {
+  animation: giroTrompo 4s ease-in-out infinite;
+  transform-origin: 64px 62px;
+}
+
+@keyframes giroTrompo {
+  0%, 100% { transform: scale(1.1) rotateY(0deg); }
+  4% { transform: scale(1.1) rotateY(1800deg); }
+  25% { transform: scale(1.1) rotateY(1800deg); }
+  29% { transform: scale(1.1) rotateY(3600deg); }
+  50% { transform: scale(1.1) rotateY(3600deg); }
 }
 
 .brand:hover .brand__icon {
@@ -1099,6 +1112,52 @@ a {
 
 .mapa-dibujando .leaflet-grab {
   cursor: crosshair !important;
+}
+
+.map-dark-toggle {
+  position: absolute;
+  bottom: 4px;
+  right: 12px;
+  z-index: 1000;
+}
+
+.map-dark-toggle__label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--transition);
+  color: #e2e8f0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  user-select: none;
+}
+
+.map-dark-toggle__label:hover {
+  background: rgba(30, 41, 59, 0.95);
+  border-color: var(--primary);
+}
+
+.map-dark-toggle__label input {
+  display: none;
+}
+
+.map-dark-toggle__icon {
+  font-size: 1rem;
+  transition: transform 0.3s ease;
+}
+
+.map-dark-toggle__label input:checked ~ .map-dark-toggle__icon {
+  transform: rotate(180deg);
+}
+
+.map-dark-toggle__label input:checked ~ .map-dark-toggle__text {
+  color: var(--primary);
 }
 
 .field {

@@ -13,7 +13,37 @@
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="index.html" aria-label="Ir al panel del gestor de flota">
-        <img class="brand__icon" src="icono-flota.svg" alt="" width="40" height="40">
+        <svg class="brand__icon" width="46" height="46" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#3b82f6"/>
+              <stop offset="100%" stop-color="#1d4ed8"/>
+            </linearGradient>
+          </defs>
+          <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#bg)"/>
+          <g class="brand__pin" style="transform-origin: 64px 62px;">
+            <path d="M64 20 C46 20 32 33.5 32 51 C32 74 64 104 64 104 C64 104 96 74 96 51 C96 33.5 82 20 64 20 Z" fill="#ffffff" fill-opacity="0.95"/>
+            <g transform="translate(64,50)">
+              <!-- sirena -->
+              <rect x="-4" y="-20" width="8" height="5" rx="2" fill="#ef4444"/>
+              <rect x="-6" y="-16" width="12" height="3" rx="1" fill="#1d4ed8"/>
+              <!-- cuerpo ambulancia frontal -->
+              <rect x="-16" y="-13" width="32" height="22" rx="4" fill="#1d4ed8"/>
+              <!-- windshield -->
+              <rect x="-12" y="-10" width="24" height="10" rx="2" fill="#93c5fd"/>
+              <!-- cruz -->
+              <rect x="-2" y="2" width="4" height="8" rx="0.5" fill="#ffffff"/>
+              <rect x="-4" y="4" width="8" height="4" rx="0.5" fill="#ffffff"/>
+              <!-- parachoques -->
+              <rect x="-16" y="10" width="32" height="4" rx="2" fill="#0f172a"/>
+              <!-- ruedas -->
+              <circle cx="-12" cy="17" r="5" fill="#1e293b"/>
+              <circle cx="12" cy="17" r="5" fill="#1e293b"/>
+              <circle cx="-12" cy="17" r="2" fill="#94a3b8"/>
+              <circle cx="12" cy="17" r="2" fill="#94a3b8"/>
+            </g>
+          </g>
+        </svg>
         <span><span class="brand__name">FLOTA</span><span class="brand__description">Gestor de flota · GPS Traccar</span></span>
       </a>
       <div class="user-summary" aria-label="Usuario actual">
@@ -115,8 +145,12 @@
               <label class="layer-control__item">
                 <input type="checkbox" id="layer-ruta" checked> 🛤️ Historial
               </label>
-              <label class="layer-control__item">
-                <input type="checkbox" id="layer-mapa-oscuro"> 🌙 Mapa Oscuro
+            </div>
+            <div class="map-dark-toggle" id="map-dark-toggle">
+              <label class="map-dark-toggle__label">
+                <input type="checkbox" id="layer-mapa-oscuro">
+                <span class="map-dark-toggle__icon">🌙</span>
+                <span class="map-dark-toggle__text">Oscuro</span>
               </label>
             </div>
           </div>
@@ -189,12 +223,22 @@
             <h2>Reportes</h2>
           </div>
           <div class="card" style="padding: 1rem;">
-            <div class="form-grid" style="grid-template-columns: 1fr 1fr auto auto auto; align-items: end; gap: 0.75rem;">
+            <div class="form-grid" style="grid-template-columns: auto auto auto auto 1fr auto auto; align-items: end; gap: 0.75rem;">
               <div class="field">
+                <label for="rep-rango">Periodo</label>
+                <select id="rep-rango" class="filtro-select">
+                  <option value="0">Hoy</option>
+                  <option value="1">Ayer</option>
+                  <option value="7" selected>Últimos 7 días</option>
+                  <option value="30">Último mes</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+              </div>
+              <div class="field" id="rep-desde-group">
                 <label for="rep-desde">Desde</label>
                 <input id="rep-desde" type="datetime-local">
               </div>
-              <div class="field">
+              <div class="field" id="rep-hasta-group">
                 <label for="rep-hasta">Hasta</label>
                 <input id="rep-hasta" type="datetime-local">
               </div>

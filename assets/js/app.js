@@ -1810,15 +1810,27 @@
 
   function generarReporte() {
     var tipo = $("#reporte-tipo").value;
-    var desde = $("#rep-desde").value;
-    var hasta = $("#rep-hasta").value;
+    var rango = $("#rep-rango").value;
+    var ahora = new Date();
+    var desde, hasta;
+    if (rango === "custom") {
+      desde = $("#rep-desde").value;
+      hasta = $("#rep-hasta").value;
+      if (!desde || !hasta) {
+        mostrarToast("Seleccioná fechas personalizadas.", "error");
+        return;
+      }
+    } else if (rango === "0") {
+      desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).toISOString().slice(0, 16);
+      hasta = ahora.toISOString().slice(0, 16);
+    } else {
+      var dias = parseInt(rango) || 7;
+      hasta = ahora.toISOString().slice(0, 16);
+      desde = new Date(ahora.getTime() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+    }
     var resultado = $("#reporte-resultado");
     if (!vehiculos.length) {
       resultado.innerHTML = '<p class="note">No hay vehículos cargados.</p>';
-      return;
-    }
-    if (!desde || !hasta) {
-      mostrarToast("Seleccioná rango de fechas.", "error");
       return;
     }
     var desdeIso = new Date(desde).toISOString();
@@ -3032,6 +3044,24 @@
     $("#btn-generar-reporte").addEventListener("click", generarReporte);
     $("#btn-exportar-csv").addEventListener("click", exportarCSV);
     $("#btn-exportar-pdf").addEventListener("click", exportarPDF);
+    $("#rep-rango").addEventListener("change", function () {
+      var ahora = new Date();
+      var hastaStr, desdeStr;
+      if (this.value === "custom") {
+        desdeStr = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+        hastaStr = ahora.toISOString().slice(0, 16);
+      } else if (this.value === "0") {
+        desdeStr = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).toISOString().slice(0, 16);
+        hastaStr = ahora.toISOString().slice(0, 16);
+      } else {
+        var dias = parseInt(this.value) || 7;
+        hastaStr = ahora.toISOString().slice(0, 16);
+        desdeStr = new Date(ahora.getTime() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+      }
+      $("#rep-desde").value = desdeStr;
+      $("#rep-hasta").value = hastaStr;
+    });
+    $("#rep-rango").dispatchEvent(new Event("change"));
 
     $("#pb-play").addEventListener("click", togglePlayback);
     $("#pb-slider").addEventListener("input", function () {
