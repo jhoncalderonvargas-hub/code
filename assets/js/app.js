@@ -452,6 +452,32 @@
   var sosDetectadoEn = {};
   var sosCounter = 0;
   var SOS_VISIBLE_MS = 10 * 60 * 1000;
+  var DOS_HORAS = 2 * 60 * 60 * 1000;
+
+  function cargarEventosLocal() {
+    try {
+      var guardados = localStorage.getItem("flota_eventos");
+      if (guardados) {
+        eventos = JSON.parse(guardados);
+        var cutoff = Date.now() - DOS_HORAS;
+        eventos = eventos.filter(function (e) {
+          var t = new Date(e.hora).getTime();
+          return t > cutoff;
+        });
+      }
+      var guardadosIds = localStorage.getItem("flota_idsVistos");
+      if (guardadosIds) idsVistos = JSON.parse(guardadosIds);
+    } catch (e) { /* ignore */ }
+  }
+
+  function guardarEventosLocal() {
+    try {
+      localStorage.setItem("flota_eventos", JSON.stringify(eventos));
+      localStorage.setItem("flota_idsVistos", JSON.stringify(idsVistos));
+    } catch (e) { /* ignore */ }
+  }
+
+  cargarEventosLocal();
   var filtroActual = { buscar: "", estado: "", conductor: "" };
   var tiempoQuieto = {};
   var distanciasCache = {};
@@ -835,7 +861,7 @@
     var ids = vehiculos.map(function (v) { return v.id; });
     if (!ids.length) return Promise.resolve();
     var primera = !ultimaRevision;
-    var desde = ultimaRevision || (Date.now() - 24 * 60 * 60 * 1000);
+    var desde = ultimaRevision || (Date.now() - 7 * 24 * 60 * 60 * 1000);
     var desdeIso = new Date(desde).toISOString();
     var params = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
       "&from=" + desdeIso + "&to=" + isoAhora();
@@ -844,26 +870,27 @@
         ultimaRevision = Date.now();
         var arr = Array.isArray(ev) ? ev : [];
         arr.sort(function (a, b) { return new Date(b.eventTime || b.serverTime || 0) - new Date(a.eventTime || a.serverTime || 0); });
-        var nuevos = [];
-        if (primera) {
-          arr.forEach(function (e) { idsVistos[e.id] = true; });
-          eventos = arr.slice(0, 40).map(enriquecerEvento);
-        } else {
-          nuevos = arr.filter(function (e) {
-            if (idsVistos[e.id]) return false;
-            idsVistos[e.id] = true;
-            return true;
-          }).slice(0, 3);
-          nuevos.forEach(notificarEvento);
-          var nuevosEnriquecidos = arr.filter(function (e) { return !eventos.some(function (ex) { return ex.id === e.id; }); }).map(enriquecerEvento);
-          eventos = nuevosEnriquecidos.concat(eventos).slice(0, 40);
-          renderAlarmas();
-        }
-        var claves = Object.keys(idsVistos);
-        if (claves.length > 200) {
-          claves.slice(0, claves.length - 200).forEach(function (k) { delete idsVistos[k]; });
-        }
-        return true;
+      var nuevos = [];
+      if (primera) {
+        arr.forEach(function (e) { idsVistos[e.id] = true; });
+        eventos = arr.slice(0, 40).map(enriquecerEvento);
+      } else {
+        nuevos = arr.filter(function (e) {
+          if (idsVistos[e.id]) return false;
+          idsVistos[e.id] = true;
+          return true;
+        }).slice(0, 3);
+        nuevos.forEach(notificarEvento);
+        var nuevosEnriquecidos = arr.filter(function (e) { return !eventos.some(function (ex) { return ex.id === e.id; }); }).map(enriquecerEvento);
+        eventos = nuevosEnriquecidos.concat(eventos).slice(0, 40);
+        renderAlarmas();
+      }
+      var claves = Object.keys(idsVistos);
+      if (claves.length > 200) {
+        claves.slice(0, claves.length - 200).forEach(function (k) { delete idsVistos[k]; });
+      }
+      guardarEventosLocal();
+      return true;
       })
       .catch(function () {
         if (!cargarEventos._avisado) {
