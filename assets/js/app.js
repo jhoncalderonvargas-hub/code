@@ -453,6 +453,79 @@
   var sosCounter = 0;
   var SOS_VISIBLE_MS = 10 * 60 * 1000;
   var DOS_HORAS = 2 * 60 * 60 * 1000;
+  var estadoGeozonas = {};
+
+  function puntoDentroCirculo(lat, lon, cLat, cLon, radioMetros) {
+    return distanciaKm(lat, lon, cLat, cLon) * 1000 <= radioMetros;
+  }
+
+  function puntoDentroPoligono(lat, lon, puntos) {
+    var dentro = false;
+    for (var i = 0, j = puntos.length - 1; i < puntos.length; j = i++) {
+      var yi = puntos[i][0], xi = puntos[i][1];
+      var yj = puntos[j][0], xj = puntos[j][1];
+      if (((yi > lon) !== (yj > lon)) && (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi)) {
+        dentro = !dentro;
+      }
+    }
+    return dentro;
+  }
+
+  function puntoDentroGeozona(lat, lon, g) {
+    if (!g._area) return false;
+    if (g._area.tipo === "circle") {
+      return puntoDentroCirculo(lat, lon, g._area.lat, g._area.lon, g._area.radio);
+    }
+    if (g._area.tipo === "polygon") {
+      return puntoDentroPoligono(lat, lon, g._area.puntos);
+    }
+    return false;
+  }
+
+  function detectarGeozonas(posiciones) {
+    posiciones.forEach(function (p) {
+      var devId = p.deviceId;
+      var lat = p.latitude;
+      var lon = p.longitude;
+      if (!lat || !lon) return;
+      if (!estadoGeozonas[devId]) estadoGeozonas[devId] = {};
+      var antes = estadoGeozonas[devId];
+      var ahora = {};
+      geozonas.forEach(function (g) {
+        var dentro = puntoDentroGeozona(lat, lon, g);
+        ahora[g.id] = dentro;
+        if (dentro && !antes[g.id]) {
+          var ev = {
+            id: "local-" + devId + "-" + g.id + "-enter-" + Date.now(),
+            type: "geofenceEnter",
+            deviceId: devId,
+            geofenceId: g.id,
+            eventTime: p.fixTime || new Date().toISOString()
+          };
+          eventos.unshift(enriquecerEvento(ev));
+          eventos = eventos.slice(0, 40);
+          notificarEvento(ev);
+          idsVistos[ev.id] = true;
+        }
+        if (!dentro && antes[g.id]) {
+          var ev2 = {
+            id: "local-" + devId + "-" + g.id + "-exit-" + Date.now(),
+            type: "geofenceExit",
+            deviceId: devId,
+            geofenceId: g.id,
+            eventTime: p.fixTime || new Date().toISOString()
+          };
+          eventos.unshift(enriquecerEvento(ev2));
+          eventos = eventos.slice(0, 40);
+          notificarEvento(ev2);
+          idsVistos[ev2.id] = true;
+        }
+      });
+      estadoGeozonas[devId] = ahora;
+    });
+    guardarEventosLocal();
+    renderAlarmas();
+  }
 
   function cargarEventosLocal() {
     try {
@@ -686,6 +759,19 @@
           return enriquecer(d, porId[d.id], distanciasCache[d.id] || null);
         });
         detectarSos(posiciones);
+        detectarGeozonas(posiciones);
+        var ids = vehiculos.map(function (v) { return v.id; });
+        if (ids.length) {
+          var desdeHist = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+          var paramsHist = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
+            "&from=" + desdeHist + "&to=" + isoAhora();
+          llamarApi("/positions?" + paramsHist).then(function (posHist) {
+            if (Array.isArray(posHist) && posHist.length) {
+              posHist.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
+              detectarGeozonas(posHist);
+            }
+          }).catch(function () {});
+        }
         return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
       }).then(function () {
         mostrarResultados();
@@ -1713,6 +1799,19 @@
       mostrarToast("Seleccioná vehículo y rango de tiempo.", "error");
       return;
     }
+    function histLocalIso(val) {
+      var d = new Date(val);
+      var y = d.getFullYear();
+      var mo = String(d.getMonth() + 1).padStart(2, "0");
+      var dia = String(d.getDate()).padStart(2, "0");
+      var h = String(d.getHours()).padStart(2, "0");
+      var min = String(d.getMinutes()).padStart(2, "0");
+      var off = -d.getTimezoneOffset();
+      var sign = off >= 0 ? "+" : "-";
+      var offH = String(Math.floor(Math.abs(off) / 60)).padStart(2, "0");
+      var offM = String(Math.abs(off) % 60).padStart(2, "0");
+      return y + "-" + mo + "-" + dia + "T" + h + ":" + min + ":00" + sign + offH + ":" + offM;
+    }
     if (!mapa || typeof L === "undefined") {
       mostrarToast("El mapa no está disponible.", "error");
       return;
@@ -1723,8 +1822,8 @@
     pbDetalles = [];
     pbIndex = 0;
     $("#hist-controles").style.display = "none";
-    var desdeIso = new Date(desde).toISOString();
-    var hastaIso = new Date(hasta).toISOString();
+    var desdeIso = histLocalIso(desde);
+    var hastaIso = histLocalIso(hasta);
     var info = $("#hist-info");
     info.textContent = "Cargando...";
     llamarApi("/positions?deviceId=" + id + "&from=" + desdeIso + "&to=" + hastaIso)
@@ -1930,28 +2029,46 @@
     var rango = $("#rep-rango").value;
     var ahora = new Date();
     var desde, hasta;
+    function localIso(d) {
+      var y = d.getFullYear();
+      var m = String(d.getMonth() + 1).padStart(2, "0");
+      var dia = String(d.getDate()).padStart(2, "0");
+      var h = String(d.getHours()).padStart(2, "0");
+      var min = String(d.getMinutes()).padStart(2, "0");
+      var off = -d.getTimezoneOffset();
+      var sign = off >= 0 ? "+" : "-";
+      var offH = String(Math.floor(Math.abs(off) / 60)).padStart(2, "0");
+      var offM = String(Math.abs(off) % 60).padStart(2, "0");
+      return y + "-" + m + "-" + dia + "T" + h + ":" + min + ":00" + sign + offH + ":" + offM;
+    }
     if (rango === "custom") {
-      desde = $("#rep-desde").value;
-      hasta = $("#rep-hasta").value;
-      if (!desde || !hasta) {
+      desde = localIso(new Date($("#rep-desde").value));
+      hasta = localIso(new Date($("#rep-hasta").value));
+      if (!$("#rep-desde").value || !$("#rep-hasta").value) {
         mostrarToast("Seleccioná fechas personalizadas.", "error");
         return;
       }
     } else if (rango === "0") {
-      desde = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).toISOString().slice(0, 16);
-      hasta = ahora.toISOString().slice(0, 16);
+      var inicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+      desde = localIso(inicio);
+      hasta = localIso(ahora);
+    } else if (rango === "1") {
+      var ayer = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - 1);
+      var hoyInicio = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate());
+      desde = localIso(ayer);
+      hasta = localIso(hoyInicio);
     } else {
       var dias = parseInt(rango) || 7;
-      hasta = ahora.toISOString().slice(0, 16);
-      desde = new Date(ahora.getTime() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+      hasta = localIso(ahora);
+      desde = localIso(new Date(ahora.getTime() - dias * 24 * 60 * 60 * 1000));
     }
     var resultado = $("#reporte-resultado");
     if (!vehiculos.length) {
       resultado.innerHTML = '<p class="note">No hay vehículos cargados.</p>';
       return;
     }
-    var desdeIso = new Date(desde).toISOString();
-    var hastaIso = new Date(hasta).toISOString();
+    var desdeIso = desde;
+    var hastaIso = hasta;
     resultado.innerHTML = '<p class="note">Generando reporte...</p>';
     if (tipo === "eventos") {
       var ids = vehiculos.map(function (v) { return v.id; });
@@ -3208,17 +3325,28 @@
     $("#btn-exportar-pdf").addEventListener("click", exportarPDF);
     $("#rep-rango").addEventListener("change", function () {
       var ahora = new Date();
+      function inputLocal(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, "0");
+        var dia = String(d.getDate()).padStart(2, "0");
+        var h = String(d.getHours()).padStart(2, "0");
+        var min = String(d.getMinutes()).padStart(2, "0");
+        return y + "-" + m + "-" + dia + "T" + h + ":" + min;
+      }
       var hastaStr, desdeStr;
       if (this.value === "custom") {
-        desdeStr = new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
-        hastaStr = ahora.toISOString().slice(0, 16);
+        desdeStr = inputLocal(new Date(ahora.getTime() - 7 * 24 * 60 * 60 * 1000));
+        hastaStr = inputLocal(ahora);
       } else if (this.value === "0") {
-        desdeStr = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).toISOString().slice(0, 16);
-        hastaStr = ahora.toISOString().slice(0, 16);
+        desdeStr = inputLocal(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
+        hastaStr = inputLocal(ahora);
+      } else if (this.value === "1") {
+        desdeStr = inputLocal(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate() - 1));
+        hastaStr = inputLocal(new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()));
       } else {
         var dias = parseInt(this.value) || 7;
-        hastaStr = ahora.toISOString().slice(0, 16);
-        desdeStr = new Date(ahora.getTime() - dias * 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+        hastaStr = inputLocal(ahora);
+        desdeStr = inputLocal(new Date(ahora.getTime() - dias * 24 * 60 * 60 * 1000));
       }
       $("#rep-desde").value = desdeStr;
       $("#rep-hasta").value = hastaStr;
