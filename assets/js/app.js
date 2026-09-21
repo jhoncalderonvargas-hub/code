@@ -1661,6 +1661,8 @@
     detenerPlayback();
     if (rutaHistorial) { mapa.removeLayer(rutaHistorial); rutaHistorial = null; }
     if (pbMarcador) { mapa.removeLayer(pbMarcador); pbMarcador = null; }
+    pbLineas.forEach(function (l) { mapa.removeLayer(l); });
+    pbLineas = [];
   }
 
   var pbPosiciones = [];
@@ -1668,6 +1670,7 @@
   var pbIntervalo = null;
   var pbMarcador = null;
   var pbDetalles = [];
+  var pbLineas = [];
 
   function cargarHistorial() {
     var id = parseInt($("#hist-vehiculo").value, 10);
@@ -1702,6 +1705,28 @@
         return;
       }
       viajes.sort(function (a, b) { return new Date(a.startTime) - new Date(b.startTime); });
+      var UMBRAL_COMBINAR = 15 * 1000;
+      var combinados = [];
+      viajes.forEach(function (v) {
+        var vInicio = new Date(v.startTime).getTime();
+        if (combinados.length === 0) {
+          combinados.push({ startTime: v.startTime, endTime: v.endTime || v.startTime, startLat: v.startLat, startLon: v.startLon, endLat: v.endLat, endLon: v.endLon, distance: v.distance || 0, maxSpeed: v.maxSpeed || 0 });
+        } else {
+          var ultimo = combinados[combinados.length - 1];
+          var ultFin = ultimo.endTime ? new Date(ultimo.endTime).getTime() : new Date(ultimo.startTime).getTime() + 3600000;
+          var gap = vInicio - ultFin;
+          if (gap >= 0 && gap <= UMBRAL_COMBINAR) {
+            ultimo.endTime = v.endTime || v.startTime;
+            ultimo.endLat = v.endLat;
+            ultimo.endLon = v.endLon;
+            ultimo.distance += (v.distance || 0);
+            ultimo.maxSpeed = Math.max(ultimo.maxSpeed, v.maxSpeed || 0);
+          } else {
+            combinados.push({ startTime: v.startTime, endTime: v.endTime || v.startTime, startLat: v.startLat, startLon: v.startLon, endLat: v.endLat, endLon: v.endLon, distance: v.distance || 0, maxSpeed: v.maxSpeed || 0 });
+          }
+        }
+      });
+      viajes = combinados;
       todasPos.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
       var colores = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
       viajes.forEach(function (viaje, idx) {
@@ -1717,17 +1742,21 @@
         pbDetalles.push({ viaje: viaje, posiciones: posViaje, color: colores[idx % colores.length] });
       });
       var todosPuntos = [];
-      pbDetalles.forEach(function (item) {
+      pbLineas = [];
+      pbDetalles.forEach(function (item, idx) {
+        var linea;
         if (item.posiciones.length >= 2) {
           var puntos = item.posiciones.map(function (p) { return [p.latitude, p.longitude]; });
-          L.polyline(puntos, { color: item.color, weight: 4, opacity: 0.8 }).addTo(mapa);
+          linea = L.polyline(puntos, { color: item.color, weight: 4, opacity: 0.3 }).addTo(mapa);
           todosPuntos = todosPuntos.concat(puntos);
         } else {
           var puntosSimple = [[item.viaje.startLat, item.viaje.startLon], [item.viaje.endLat, item.viaje.endLon]];
-          L.polyline(puntosSimple, { color: item.color, weight: 4, opacity: 0.8 }).addTo(mapa);
+          linea = L.polyline(puntosSimple, { color: item.color, weight: 4, opacity: 0.3 }).addTo(mapa);
           todosPuntos = todosPuntos.concat(puntosSimple);
         }
+        pbLineas.push(linea);
       });
+      resaltarViaje(0);
       if (todosPuntos.length) {
         mapa.fitBounds(L.latLngBounds(todosPuntos).pad(0.1));
       }
@@ -1763,9 +1792,32 @@
     $("#pb-slider").value = pbIndex;
   }
 
+  function resaltarViaje(idx) {
+    pbLineas.forEach(function (linea, i) {
+      if (i === idx) {
+        linea.setStyle({ weight: 5, opacity: 1 });
+      } else {
+        linea.setStyle({ weight: 2, opacity: 0.2 });
+      }
+    });
+    if (pbLineas[idx] && mapa) {
+      mapa.fitBounds(pbLineas[idx].getBounds().pad(0.2));
+    }
+    if (pbDetalles[idx]) {
+      var v = pbDetalles[idx].viaje;
+      var velMax = v.maxSpeed ? Math.round(v.maxSpeed * 1.852) : 0;
+      var km = v.distance ? (v.distance / 1000).toFixed(1) : "0";
+      var horaInicio = v.startTime ? horaLocal(v.startTime) : "";
+      var horaFin = v.endTime ? horaLocal(v.endTime) : "";
+      $("#pb-fecha").textContent = horaInicio + " — " + horaFin;
+      $("#pb-info").textContent = "Viaje " + (idx + 1) + "/" + pbDetalles.length + " · " + km + " km · Vel máx: " + velMax + " km/h";
+      $("#pb-slider").value = idx;
+    }
+  }
+
   function detenerPlayback() {
     if (pbIntervalo) { clearInterval(pbIntervalo); pbIntervalo = null; }
-    $("#pb-play").textContent = "▶";
+    $("#pb-play").textContent = "⏵";
   }
 
   function togglePlayback() {
@@ -3066,16 +3118,18 @@
     $("#pb-play").addEventListener("click", togglePlayback);
     $("#pb-slider").addEventListener("input", function () {
       pbIndex = parseInt(this.value, 10);
-      if (pbDetalles[pbIndex]) {
-        var detalle = pbDetalles[pbIndex];
-        var viaje = detalle.viaje;
-        var velMax = viaje.maxSpeed ? Math.round(viaje.maxSpeed * 1.852) : 0;
-        var km = viaje.distance ? (viaje.distance / 1000).toFixed(1) : "0";
-        var horaInicio = viaje.startTime ? horaLocal(viaje.startTime) : "";
-        var horaFin = viaje.endTime ? horaLocal(viaje.endTime) : "";
-        $("#pb-fecha").textContent = horaInicio + " — " + horaFin;
-        $("#pb-info").textContent = "Viaje " + (pbIndex + 1) + "/" + pbDetalles.length + " · " + km + " km · Vel máx: " + velMax + " km/h";
-        $("#pb-slider").value = pbIndex;
+      resaltarViaje(pbIndex);
+    });
+    $("#pb-prev").addEventListener("click", function () {
+      if (pbDetalles.length && pbIndex > 0) {
+        pbIndex--;
+        resaltarViaje(pbIndex);
+      }
+    });
+    $("#pb-next").addEventListener("click", function () {
+      if (pbDetalles.length && pbIndex < pbDetalles.length - 1) {
+        pbIndex++;
+        resaltarViaje(pbIndex);
       }
     });
 

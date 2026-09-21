@@ -410,8 +410,9 @@ a {
 }
 
 .button--icon {
-  background: none;
-  border: 1px solid var(--border);
+  background: var(--primary);
+  color: #fff;
+  border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
   padding: 0.4rem 0.6rem;
   cursor: pointer;
@@ -420,8 +421,20 @@ a {
 }
 
 .button--icon:hover {
-  background: var(--surface-2);
-  border-color: var(--text-muted);
+  background: var(--primary-dark);
+  border-color: var(--primary-dark);
+}
+
+.button--play {
+  font-size: 1.3rem;
+  padding: 0.4rem 0.8rem;
+  min-width: 2.5rem;
+  border-radius: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .conexion {

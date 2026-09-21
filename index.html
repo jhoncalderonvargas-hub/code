@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Gestor de flota conectado a la API de Traccar.">
   <title>Gestor de flota | FLOTA</title>
+  <link rel="icon" href="icono-flota.svg" type="image/svg+xml">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <link rel="stylesheet" href="assets/css/main.css">
 </head>
@@ -154,6 +155,28 @@
               </label>
             </div>
           </div>
+          <div id="hist-controles" style="display:none; margin-top: 0.75rem;">
+            <div class="card" style="padding: 0.75rem;">
+              <div class="playback-bar">
+                <span id="pb-fecha" style="min-width:160px;"></span>
+                <input type="range" id="pb-slider" min="0" max="100" value="0" style="flex:1;">
+                <div class="cluster">
+                  <button class="button button--icon" id="pb-prev" type="button" title="Viaje anterior">◀</button>
+                  <button class="button button--icon" id="pb-next" type="button" title="Siguiente viaje">▶</button>
+                  <button class="button button--filled button--play" id="pb-play" type="button" title="Reproducir ruta">⏵</button>
+                  <select id="pb-velocidad" class="filtro-select" style="width:auto;">
+                    <option value="1">1x</option>
+                    <option value="2">2x</option>
+                    <option value="3" selected>3x</option>
+                    <option value="5">5x</option>
+                    <option value="10">10x</option>
+                    <option value="20">20x</option>
+                  </select>
+                </div>
+              </div>
+              <div id="pb-info" class="note" style="margin-top: 0.5rem;"></div>
+            </div>
+          </div>
         </section>
 
         <section id="seccion-historial">
@@ -190,22 +213,6 @@
               <button class="button button--filled" id="btn-cargar-historial" type="button">Cargar ruta</button>
             </div>
             <div id="hist-info" class="note" style="margin-top: 0.75rem;"></div>
-            <div id="hist-controles" style="display:none; margin-top: 1rem;">
-              <div class="playback-bar">
-                <button class="button button--icon" id="pb-play" type="button">▶</button>
-                <span id="pb-fecha" style="min-width:160px;"></span>
-                <input type="range" id="pb-slider" min="0" max="100" value="0" style="flex:1;">
-                <select id="pb-velocidad" class="filtro-select" style="width:auto;">
-                  <option value="1">1x</option>
-                  <option value="2">2x</option>
-                  <option value="3" selected>3x</option>
-                  <option value="5">5x</option>
-                  <option value="10">10x</option>
-                  <option value="20">20x</option>
-                </select>
-              </div>
-              <div id="pb-info" class="note" style="margin-top: 0.5rem;"></div>
-            </div>
           </div>
         </section>
 
