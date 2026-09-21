@@ -1663,6 +1663,10 @@
     if (pbMarcador) { mapa.removeLayer(pbMarcador); pbMarcador = null; }
     pbLineas.forEach(function (l) { mapa.removeLayer(l); });
     pbLineas = [];
+    pbMarcadoresInicio.forEach(function (m) { mapa.removeLayer(m); });
+    pbMarcadoresInicio = [];
+    pbMarcadoresFin.forEach(function (m) { mapa.removeLayer(m); });
+    pbMarcadoresFin = [];
   }
 
   var pbPosiciones = [];
@@ -1671,6 +1675,8 @@
   var pbMarcador = null;
   var pbDetalles = [];
   var pbLineas = [];
+  var pbMarcadoresInicio = [];
+  var pbMarcadoresFin = [];
 
   function cargarHistorial() {
     var id = parseInt($("#hist-vehiculo").value, 10);
@@ -1694,65 +1700,95 @@
     var hastaIso = new Date(hasta).toISOString();
     var info = $("#hist-info");
     info.textContent = "Cargando...";
-    Promise.all([
-      llamarApi("/reports/trips?deviceId=" + id + "&from=" + desdeIso + "&to=" + hastaIso),
-      llamarApi("/positions?deviceId=" + id + "&from=" + desdeIso + "&to=" + hastaIso)
-    ]).then(function (res) {
-      var viajes = Array.isArray(res[0]) ? res[0] : [];
-      var todasPos = Array.isArray(res[1]) ? res[1] : [];
-      if (!viajes.length) {
+    llamarApi("/positions?deviceId=" + id + "&from=" + desdeIso + "&to=" + hastaIso)
+      .then(function (todasPos) {
+      todasPos = Array.isArray(todasPos) ? todasPos : [];
+      todasPos.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
+      if (!todasPos.length) {
+        info.textContent = "No hay posiciones en ese rango de tiempo.";
+        return;
+      }
+      var UMbralParada = 5;
+      var umbralDistancia = 0.1;
+      var umbralTiempo = 2;
+      var viajesCalc = [];
+      var actual = null;
+      for (var i = 0; i < todasPos.length; i++) {
+        var vel = todasPos[i].speed ? Math.round(todasPos[i].speed * 1.852) : 0;
+        if (vel > 0 && !actual) {
+          actual = { startTime: todasPos[i].fixTime, startLat: todasPos[i].latitude, startLon: todasPos[i].longitude, puntos: [todasPos[i]], km: 0, maxSpeed: vel, distance: 0 };
+        } else if (actual) {
+          actual.puntos.push(todasPos[i]);
+          if (i > 0) {
+            var dist = distanciaKm(todasPos[i - 1].latitude, todasPos[i - 1].longitude, todasPos[i].latitude, todasPos[i].longitude);
+            actual.km += dist;
+          }
+          if (vel > actual.maxSpeed) actual.maxSpeed = vel;
+          if (vel === 0) {
+            var tiempoQuietos = 0;
+            for (var j = i + 1; j < todasPos.length; j++) {
+              var vj = todasPos[j].speed ? Math.round(todasPos[j].speed * 1.852) : 0;
+              if (vj > 0) break;
+              tiempoQuietos = (new Date(todasPos[j].fixTime) - new Date(todasPos[i].fixTime)) / 60000;
+            }
+            if (tiempoQuietos >= UMbralParada || i === todasPos.length - 1) {
+              actual.endTime = todasPos[i].fixTime;
+              actual.endLat = todasPos[i].latitude;
+              actual.endLon = todasPos[i].longitude;
+              actual.distance = actual.km * 1000;
+              var durMin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
+              if (actual.km >= umbralDistancia && durMin >= umbralTiempo) {
+                viajesCalc.push(actual);
+              }
+              actual = null;
+            }
+          }
+        }
+      }
+      if (actual && actual.puntos.length > 1) {
+        actual.endTime = todasPos[todasPos.length - 1].fixTime;
+        actual.endLat = todasPos[todasPos.length - 1].latitude;
+        actual.endLon = todasPos[todasPos.length - 1].longitude;
+        actual.distance = actual.km * 1000;
+        var durFin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
+        if (actual.km >= umbralDistancia && durFin >= umbralTiempo) {
+          viajesCalc.push(actual);
+        }
+      }
+      if (!viajesCalc.length) {
         info.textContent = "No hay viajes en ese rango de tiempo.";
         return;
       }
-      viajes.sort(function (a, b) { return new Date(a.startTime) - new Date(b.startTime); });
-      var UMBRAL_COMBINAR = 15 * 1000;
-      var combinados = [];
-      viajes.forEach(function (v) {
-        var vInicio = new Date(v.startTime).getTime();
-        if (combinados.length === 0) {
-          combinados.push({ startTime: v.startTime, endTime: v.endTime || v.startTime, startLat: v.startLat, startLon: v.startLon, endLat: v.endLat, endLon: v.endLon, distance: v.distance || 0, maxSpeed: v.maxSpeed || 0 });
-        } else {
-          var ultimo = combinados[combinados.length - 1];
-          var ultFin = ultimo.endTime ? new Date(ultimo.endTime).getTime() : new Date(ultimo.startTime).getTime() + 3600000;
-          var gap = vInicio - ultFin;
-          if (gap >= 0 && gap <= UMBRAL_COMBINAR) {
-            ultimo.endTime = v.endTime || v.startTime;
-            ultimo.endLat = v.endLat;
-            ultimo.endLon = v.endLon;
-            ultimo.distance += (v.distance || 0);
-            ultimo.maxSpeed = Math.max(ultimo.maxSpeed, v.maxSpeed || 0);
-          } else {
-            combinados.push({ startTime: v.startTime, endTime: v.endTime || v.startTime, startLat: v.startLat, startLon: v.startLon, endLat: v.endLat, endLon: v.endLon, distance: v.distance || 0, maxSpeed: v.maxSpeed || 0 });
-          }
-        }
-      });
-      viajes = combinados;
-      todasPos.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
+      var viajes = viajesCalc;
       var colores = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
       viajes.forEach(function (viaje, idx) {
-        var tInicio = new Date(viaje.startTime).getTime();
-        var tFin = viaje.endTime ? new Date(viaje.endTime).getTime() : tInicio + 3600000;
-        var posViaje = [];
-        todasPos.forEach(function (p) {
-          var t = new Date(p.fixTime).getTime();
-          if (t >= tInicio - 60000 && t <= tFin + 60000) {
-            posViaje.push(p);
-          }
-        });
-        pbDetalles.push({ viaje: viaje, posiciones: posViaje, color: colores[idx % colores.length] });
+        pbDetalles.push({ viaje: viaje, posiciones: viaje.puntos, color: colores[idx % colores.length] });
       });
       var todosPuntos = [];
       pbLineas = [];
+      pbMarcadoresInicio = [];
+      pbMarcadoresFin = [];
       pbDetalles.forEach(function (item, idx) {
-        var linea;
-        if (item.posiciones.length >= 2) {
-          var puntos = item.posiciones.map(function (p) { return [p.latitude, p.longitude]; });
-          linea = L.polyline(puntos, { color: item.color, weight: 4, opacity: 0.3 }).addTo(mapa);
-          todosPuntos = todosPuntos.concat(puntos);
-        } else {
-          var puntosSimple = [[item.viaje.startLat, item.viaje.startLon], [item.viaje.endLat, item.viaje.endLon]];
-          linea = L.polyline(puntosSimple, { color: item.color, weight: 4, opacity: 0.3 }).addTo(mapa);
-          todosPuntos = todosPuntos.concat(puntosSimple);
+        var puntos = item.posiciones.map(function (p) { return [p.latitude, p.longitude]; });
+        var linea = L.polyline(puntos, { color: item.color, weight: 4, opacity: 0.3 }).addTo(mapa);
+        todosPuntos = todosPuntos.concat(puntos);
+        if (puntos.length >= 1) {
+          var iconInicio = L.divIcon({
+            className: "route-marker",
+            html: '<div style="width:14px;height:14px;background:#16a34a;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+          });
+          var iconFin = L.divIcon({
+            className: "route-marker",
+            html: '<div style="width:14px;height:14px;background:#dc2626;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>',
+            iconSize: [14, 14],
+            iconAnchor: [7, 7]
+          });
+          var mInicio = L.marker(puntos[0], { icon: iconInicio, interactive: false }).addTo(mapa);
+          var mFin = L.marker(puntos[puntos.length - 1], { icon: iconFin, interactive: false }).addTo(mapa);
+          pbMarcadoresInicio.push(mInicio);
+          pbMarcadoresFin.push(mFin);
         }
         pbLineas.push(linea);
       });
@@ -1800,6 +1836,8 @@
         linea.setStyle({ weight: 2, opacity: 0.2 });
       }
     });
+    pbMarcadoresInicio.forEach(function (m, i) { m.setOpacity(i === idx ? 1 : 0.15); });
+    pbMarcadoresFin.forEach(function (m, i) { m.setOpacity(i === idx ? 1 : 0.15); });
     if (pbLineas[idx] && mapa) {
       mapa.fitBounds(pbLineas[idx].getBounds().pad(0.2));
     }
@@ -3086,6 +3124,51 @@
     });
 
     $("#btn-cargar-historial").addEventListener("click", cargarHistorial);
+
+    function exportarGPX() {
+      if (!pbDetalles[pbIndex]) return;
+      var item = pbDetalles[pbIndex];
+      var pts = item.posiciones;
+      if (!pts || pts.length < 2) return;
+      var nombre = "flota_viaje_" + (pbIndex + 1) + "_" + new Date().toISOString().slice(0, 10) + ".gpx";
+      var gpx = '<?xml version="1.0" encoding="UTF-8"?>\n';
+      gpx += '<gpx version="1.1" creator="Flota GPS"\n';
+      gpx += '  xmlns="http://www.topografix.com/GPX/1/1"\n';
+      gpx += '  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n';
+      gpx += '  xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">\n';
+      gpx += '  <metadata>\n';
+      gpx += '    <name>Viaje ' + (pbIndex + 1) + '</name>\n';
+      gpx += '    <time>' + (item.viaje.startTime || new Date().toISOString()) + '</time>\n';
+      gpx += '  </metadata>\n';
+      gpx += '  <trk>\n';
+      gpx += '    <name>Viaje ' + (pbIndex + 1) + '</name>\n';
+      gpx += '    <trkseg>\n';
+      pts.forEach(function (p) {
+        var ele = p.altitude ? p.altitude.toFixed(1) : "0";
+        var spd = p.speed ? (p.speed * 1.852).toFixed(1) : "0";
+        gpx += '      <trkpt lat="' + p.latitude + '" lon="' + p.longitude + '">\n';
+        gpx += '        <ele>' + ele + '</ele>\n';
+        gpx += '        <time>' + p.fixTime + '</time>\n';
+        gpx += '        <extensions>\n';
+        gpx += '          <speed>' + spd + '</speed>\n';
+        gpx += '        </extensions>\n';
+        gpx += '      </trkpt>\n';
+      });
+      gpx += '    </trkseg>\n';
+      gpx += '  </trk>\n';
+      gpx += '</gpx>';
+      var blob = new Blob([gpx], { type: "application/gpx+xml" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = nombre;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    $("#btn-exportar-gpx").addEventListener("click", exportarGPX);
 
     $("#hist-rango").addEventListener("change", function () {
       var rango = this.value;
