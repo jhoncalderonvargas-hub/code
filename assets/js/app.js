@@ -447,85 +447,7 @@
   var eventos = [];
   var idsVistos = {};
   var ultimaRevision = 0;
-  var eventosSos = [];
-  var alarmasVistas = {};
-  var sosDetectadoEn = {};
-  var sosCounter = 0;
-  var SOS_VISIBLE_MS = 10 * 60 * 1000;
   var DOS_HORAS = 2 * 60 * 60 * 1000;
-  var estadoGeozonas = {};
-
-  function puntoDentroCirculo(lat, lon, cLat, cLon, radioMetros) {
-    return distanciaKm(lat, lon, cLat, cLon) * 1000 <= radioMetros;
-  }
-
-  function puntoDentroPoligono(lat, lon, puntos) {
-    var dentro = false;
-    for (var i = 0, j = puntos.length - 1; i < puntos.length; j = i++) {
-      var yi = puntos[i][0], xi = puntos[i][1];
-      var yj = puntos[j][0], xj = puntos[j][1];
-      if (((yi > lon) !== (yj > lon)) && (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi)) {
-        dentro = !dentro;
-      }
-    }
-    return dentro;
-  }
-
-  function puntoDentroGeozona(lat, lon, g) {
-    if (!g._area) return false;
-    if (g._area.tipo === "circle") {
-      return puntoDentroCirculo(lat, lon, g._area.lat, g._area.lon, g._area.radio);
-    }
-    if (g._area.tipo === "polygon") {
-      return puntoDentroPoligono(lat, lon, g._area.puntos);
-    }
-    return false;
-  }
-
-  function detectarGeozonas(posiciones) {
-    posiciones.forEach(function (p) {
-      var devId = p.deviceId;
-      var lat = p.latitude;
-      var lon = p.longitude;
-      if (!lat || !lon) return;
-      if (!estadoGeozonas[devId]) estadoGeozonas[devId] = {};
-      var antes = estadoGeozonas[devId];
-      var ahora = {};
-      geozonas.forEach(function (g) {
-        var dentro = puntoDentroGeozona(lat, lon, g);
-        ahora[g.id] = dentro;
-        if (dentro && !antes[g.id]) {
-          var ev = {
-            id: "local-" + devId + "-" + g.id + "-enter-" + Date.now(),
-            type: "geofenceEnter",
-            deviceId: devId,
-            geofenceId: g.id,
-            eventTime: p.fixTime || new Date().toISOString()
-          };
-          eventos.unshift(enriquecerEvento(ev));
-          eventos = eventos.slice(0, 40);
-          notificarEvento(ev);
-          idsVistos[ev.id] = true;
-        }
-        if (!dentro && antes[g.id]) {
-          var ev2 = {
-            id: "local-" + devId + "-" + g.id + "-exit-" + Date.now(),
-            type: "geofenceExit",
-            deviceId: devId,
-            geofenceId: g.id,
-            eventTime: p.fixTime || new Date().toISOString()
-          };
-          eventos.unshift(enriquecerEvento(ev2));
-          eventos = eventos.slice(0, 40);
-          notificarEvento(ev2);
-          idsVistos[ev2.id] = true;
-        }
-      });
-      estadoGeozonas[devId] = ahora;
-    });
-    guardarEventosLocal();
-    renderAlarmas();
-  }
 
   function cargarEventosLocal() {
     try {
@@ -758,20 +680,6 @@
         vehiculos = seleccion.map(function (d) {
           return enriquecer(d, porId[d.id], distanciasCache[d.id] || null);
         });
-        detectarSos(posiciones);
-        detectarGeozonas(posiciones);
-        var ids = vehiculos.map(function (v) { return v.id; });
-        if (ids.length) {
-          var desdeHist = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-          var paramsHist = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
-            "&from=" + desdeHist + "&to=" + isoAhora();
-          llamarApi("/positions?" + paramsHist).then(function (posHist) {
-            if (Array.isArray(posHist) && posHist.length) {
-              posHist.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
-              detectarGeozonas(posHist);
-            }
-          }).catch(function () {});
-        }
         return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
       }).then(function () {
         mostrarResultados();
@@ -1002,15 +910,13 @@
     var total = $("#alarmas-num");
     var dosHorasAtras = Date.now() - 2 * 60 * 60 * 1000;
     eventos = eventos.filter(function (e) { return new Date(e.hora).getTime() > dosHorasAtras; });
-    eventosSos = eventosSos.filter(function (e) { return new Date(e.hora).getTime() > dosHorasAtras; });
-    var lista = eventosSos.concat(eventos);
-    if (!lista.length) {
+    if (!eventos.length) {
       contenedor.innerHTML = '<div class="vacio"><p><strong>Sin alarmas registradas.</strong></p><p class="note" style="margin-top:0.25rem;">Las alarmas SOS de los dispositivos, y las entradas/salidas de geozonas, aparecerán aquí en tiempo real.</p></div>';
       total.textContent = "0";
       return;
     }
-    total.textContent = String(lista.length);
-    contenedor.innerHTML = lista.map(eventoHTML).join("");
+    total.textContent = String(eventos.length);
+    contenedor.innerHTML = eventos.map(eventoHTML).join("");
   }
 
   function eventoHTML(e) {
@@ -1029,8 +935,8 @@
       : '<span class="badge badge--' + mi[0] + '">' + mi[1] + '</span>';
     return '<div class="evento' + (e.tipo === "alarm" ? " evento--alarma" : "") + '">' +
       encabezado +
-      '<span>' + esc(texto) + '</span>' +
-      '<span class="evento__time" title="' + (e.hora ? esc(fechaHoraLocal(e.hora)) : "") + '">' + (e.hora ? desdeHace(e.hora) + ' · ' + fechaHoraLocal(e.hora) : "") + '</span>' +
+      '<span>' + esc(texto) + (e.hora ? ' · <span style="font-size:85%">' + desdeHace(e.hora) + '</span>' : '') + '</span>' +
+      '<span class="evento__time" title="' + (e.hora ? esc(fechaHoraLocal(e.hora)) : "") + '">' + (e.hora ? fechaHoraLocal(e.hora) : "") + '</span>' +
     '</div>';
   }
 
@@ -1042,51 +948,6 @@
       ? "¡SOS! Alarma de pánico desde " + nombreV
       : nombreV + (e.type === "geofenceEnter" ? " entró a " : " salió de ") + (nombreG || "una geozona");
     mostrarToast(msg, tipo);
-  }
-
-  function detectarSos(posiciones) {
-    if (!Array.isArray(posiciones) || !posiciones.length) return;
-    posiciones.forEach(function (p) {
-      if (!p || !p.deviceId) return;
-      var alarm = p.attributes && p.attributes.alarm ? String(p.attributes.alarm) : "";
-      if (!alarm) {
-        alarmasVistas[p.deviceId] = "";
-        delete sosDetectadoEn[p.deviceId];
-        return;
-      }
-      if (!sosDetectadoEn[p.deviceId]) sosDetectadoEn[p.deviceId] = Date.now();
-      if (alarmasVistas[p.deviceId] === alarm) return;
-      alarmasVistas[p.deviceId] = alarm;
-      var v = buscarVehiculo(p.deviceId);
-      var nombre = v ? v.nombre : ("Vehículo " + p.deviceId);
-      var ev = {
-        id: "sos-" + p.deviceId + "-" + Date.now() + "-" + (++sosCounter),
-        tipo: "alarm",
-        deviceId: p.deviceId,
-        vehiculo: nombre,
-        geozona: "",
-        hora: p.fixTime || new Date().toISOString()
-      };
-      eventosSos.unshift(ev);
-      eventosSos = eventosSos.slice(0, 40);
-      mostrarToast("¡SOS! Alarma de pánico desde " + nombre, "error");
-      renderAlarmas();
-    });
-  }
-
-  var velocidadAnterior = {};
-  function detectarExcesoVelocidad() {
-    var limite = parseFloat(config.limiteVelocidad) || 80;
-    vehiculos.forEach(function (v) {
-      if (!v.tienePosicion || v.velocidad <= limite) {
-        velocidadAnterior[v.id] = v.velocidad;
-        return;
-      }
-      if (velocidadAnterior[v.id] === undefined || velocidadAnterior[v.id] <= limite) {
-        mostrarToast("¡Exceso de velocidad! " + v.nombre + " a " + v.velocidad + " km/h (límite: " + limite + ")", "error");
-      }
-      velocidadAnterior[v.id] = v.velocidad;
-    });
   }
 
   function actualizarTiempoQuieto() {
@@ -2318,13 +2179,7 @@
     var velocidad = p && p.speed ? Math.round(p.speed * 1.852) : 0;
     if (velocidad > 0) registrarVelocidad(d.id, velocidad);
     var encendido = p && p.attributes ? String(p.attributes.ignition) === "true" : null;
-    var sosActual = p && p.attributes && p.attributes.alarm ? String(p.attributes.alarm) : "";
-    if (!sosActual) {
-      delete sosDetectadoEn[d.id];
-    } else if (!sosDetectadoEn[d.id]) {
-      sosDetectadoEn[d.id] = Date.now();
-    }
-    var sos = sosActual && Date.now() - sosDetectadoEn[d.id] < SOS_VISIBLE_MS ? sosActual : "";
+    var sos = p && p.attributes && p.attributes.alarm ? String(p.attributes.alarm) : "";
     var km = typeof distancia === "number" ? distancia / 1000 : null;
     var consumo = consumoVehiculo(d.id);
     var litros = km === null ? null : km * (consumo / 100);
@@ -2358,7 +2213,9 @@
         etiqueta: d.lastUpdate && Date.now() - new Date(d.lastUpdate).getTime() > LAPSO ? "Sin señal" : "Sin datos"
       };
     }
-    var edad = Date.now() - new Date(p.fixTime).getTime();
+    var edadFix = Date.now() - new Date(p.fixTime).getTime();
+    var edadServer = p.serverTime ? Date.now() - new Date(p.serverTime).getTime() : edadFix;
+    var edad = Math.min(edadFix, edadServer);
     if (edad > LAPSO) return { tipo: "offline", etiqueta: "Sin señal" };
     var kmh = Math.round((p.speed || 0) * 1.852);
     if (kmh > 1) return { tipo: "moving", etiqueta: "En movimiento" };
@@ -2380,7 +2237,6 @@
     }
     ajustarVista();
     renderAlarmas();
-    detectarExcesoVelocidad();
     actualizarTiempoQuieto();
     rellenarSelectoresConductores();
     rellenarSelectorHistorial();
@@ -2388,7 +2244,6 @@
     $("#ultima-actualizacion").textContent = "Actualizado: " + d.toLocaleTimeString("es");
     estadoConexion("ok", "Conectado a " + hostCorto());
     guardarVelocidades();
-    ultimoRefreshCompleto = Date.now();
   }
 
   function pintarEstadisticas() {
@@ -2904,33 +2759,6 @@
     detenerAutoRefresco();
     refrescar();
     temporizador = setInterval(refrescar, config.refreshSec * 1000);
-    iniciarPollingSOS();
-  }
-
-  var temporizadorSOS = null;
-  var pollingSOSActivo = false;
-  var pollingRefrescando = false;
-  var ultimoRefreshCompleto = 0;
-
-  function iniciarPollingSOS() {
-    detenerPollingSOS();
-    pollingSOSActivo = true;
-    temporizadorSOS = setInterval(function () {
-      if (!config.baseUrl || pollingRefrescando || refrescando) return;
-      if (Date.now() - ultimoRefreshCompleto < 5000) return;
-      pollingRefrescando = true;
-      llamarApi("/positions").then(function (posiciones) {
-        if (Array.isArray(posiciones)) detectarSos(posiciones);
-      }).finally(function () { pollingRefrescando = false; });
-    }, 5000);
-  }
-
-  function detenerPollingSOS() {
-    if (temporizadorSOS) {
-      clearInterval(temporizadorSOS);
-      temporizadorSOS = null;
-    }
-    pollingSOSActivo = false;
   }
 
   function detenerAutoRefresco() {
@@ -2938,7 +2766,6 @@
       clearInterval(temporizador);
       temporizador = null;
     }
-    detenerPollingSOS();
   }
 
   var modalConductores = $("#modal-conductores");
@@ -3132,7 +2959,6 @@
     });
     $("#btn-limpiar-alarmas").addEventListener("click", function () {
       eventos = [];
-      eventosSos = [];
       idsVistos = {};
       renderAlarmas();
     });
