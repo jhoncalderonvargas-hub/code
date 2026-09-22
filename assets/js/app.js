@@ -446,6 +446,7 @@
   var geozonaLayers = {};
   var eventos = [];
   var idsVistos = {};
+  var sosVistos = {};
   var ultimaRevision = 0;
   var DOS_HORAS = 2 * 60 * 60 * 1000;
 
@@ -476,6 +477,8 @@
   var filtroActual = { buscar: "", estado: "", conductor: "" };
   var tiempoQuieto = {};
   var distanciasCache = {};
+  var distanciasDia = "";
+  var calculandoDistancias = false;
 
   var $ = function (s) { return document.querySelector(s); };
 
@@ -646,7 +649,8 @@
     if (typeof AbortController !== "undefined" && !o.sinTimeout) {
       var ctrl = new AbortController();
       op.signal = ctrl.signal;
-      setTimeout(function () { ctrl.abort(); }, 15000);
+      var ms = o.timeoutMs || 15000;
+      setTimeout(function () { ctrl.abort(); }, ms);
     }
     return fetch(base + "/api" + ruta, op).then(function (r) {
       if (r.status === 401) throw new Error("Acceso no autorizado (401). Revisa token o credenciales.");
@@ -682,6 +686,7 @@
         });
         return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
       }).then(function () {
+        detectarSosDesdePosiciones();
         mostrarResultados();
         calcularDistanciasDePosiciones();
       })
@@ -694,33 +699,57 @@
   var ultimasPosiciones = [];
 
   function calcularDistanciasDePosiciones() {
-    var posicionesPorDispositivo = {};
-    ultimasPosiciones.forEach(function (p) {
-      if (!posicionesPorDispositivo[p.deviceId]) {
-        posicionesPorDispositivo[p.deviceId] = [];
-      }
-      posicionesPorDispositivo[p.deviceId].push(p);
-    });
-    vehiculos.forEach(function (v) {
-      if (v.id in distanciasCache) return;
-      var posiciones = posicionesPorDispositivo[v.id];
-      if (!posiciones || posiciones.length < 2) return;
-      posiciones.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
-      var totalMetros = 0;
-      for (var i = 1; i < posiciones.length; i++) {
-        totalMetros += distanciaKm(posiciones[i - 1].latitude, posiciones[i - 1].longitude, posiciones[i].latitude, posiciones[i].longitude) * 1000;
-      }
-      if (totalMetros > 0) {
-        distanciasCache[v.id] = totalMetros;
-        v.distancia = totalMetros;
-        var km = totalMetros / 1000;
+    var hoyClave = new Date().toDateString();
+    if (calculandoDistancias) return;
+    if (distanciasDia === hoyClave && Object.keys(distanciasCache).length) {
+      vehiculos.forEach(function (v) {
+        if (distanciasCache[v.id] != null) {
+          v.distancia = distanciasCache[v.id];
+          var km = distanciasCache[v.id] / 1000;
+          var consumo = consumoVehiculo(v.id);
+          v.litros = km * (consumo / 100);
+          v.costo = v.litros * (parseFloat(config.precioCombustible) || 0);
+        }
+      });
+      pintarEstadisticas();
+      return;
+    }
+    if (!vehiculos.length) return;
+    calculandoDistancias = true;
+    var desde = histLocalIso(new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 0, 0, 0));
+    var hasta = histLocalIso(new Date());
+    Promise.all(vehiculos.map(function (v) {
+      return posicionesRango(v.id, desde, hasta).then(function (arr) {
+        arr = Array.isArray(arr) ? arr : [];
+        arr.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
+        var totalMetros = 0;
+        for (var i = 1; i < arr.length; i++) {
+          totalMetros += distanciaKm(arr[i - 1].latitude, arr[i - 1].longitude, arr[i].latitude, arr[i].longitude) * 1000;
+        }
+        return { id: v.id, metros: totalMetros };
+      }).catch(function () {
+        return { id: v.id, metros: distanciasCache[v.id] || 0 };
+      });
+    })).then(function resultados(res) {
+      distanciasCache = {};
+      res.forEach(function (r) {
+        if (r.metros > 0) distanciasCache[r.id] = r.metros;
+      });
+      distanciasDia = hoyClave;
+      vehiculos.forEach(function (v) {
+        var m = distanciasCache[v.id];
+        if (m == null) return;
+        v.distancia = m;
+        var km = m / 1000;
         var consumo = consumoVehiculo(v.id);
         v.litros = km * (consumo / 100);
-        var precio = parseFloat(config.precioCombustible) || 0;
-        v.costo = v.litros * precio;
-      }
+        v.costo = v.litros * (parseFloat(config.precioCombustible) || 0);
+      });
+      pintarEstadisticas();
+      pintarVehiculos();
+    }).finally(function () {
+      calculandoDistancias = false;
     });
-    pintarEstadisticas();
   }
 
   function manejarError(err) {
@@ -858,8 +887,8 @@
     var desde = ultimaRevision || (Date.now() - 7 * 24 * 60 * 60 * 1000);
     var desdeIso = new Date(desde).toISOString();
     var params = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
-      "&from=" + desdeIso + "&to=" + isoAhora();
-    return llamarApi("/reports/events?" + params)
+      "&from=" + encodeURIComponent(desdeIso) + "&to=" + encodeURIComponent(isoAhora());
+    return llamarApi("/reports/events?" + params, null, { timeoutMs: 30000 })
       .then(function (ev) {
         ultimaRevision = Date.now();
         var arr = Array.isArray(ev) ? ev : [];
@@ -905,6 +934,54 @@
     };
   }
 
+  function esAlarmatipo(tipo) {
+    return tipo === "alarm" || tipo === "sos" || (typeof tipo === "string" && tipo.indexOf("alarm") !== -1);
+  }
+
+  function agregarEventoSos(v) {
+    var hora = v.hora && !isNaN(new Date(v.hora).getTime())
+      ? new Date(v.hora).toISOString()
+      : new Date().toISOString();
+    var t = new Date(hora).getTime();
+    var duplicado = eventos.some(function (e) {
+      return esAlarmatipo(e.tipo) && e.vehiculo === v.nombre &&
+        Math.abs(new Date(e.hora).getTime() - t) < 120000;
+    });
+    if (duplicado) return;
+    var ev = {
+      id: "sos-" + v.id + "-" + t,
+      tipo: "alarm",
+      vehiculo: v.nombre,
+      geozona: "",
+      hora: hora
+    };
+    eventos.unshift(ev);
+    eventos = eventos.slice(0, 40);
+    idsVistos[ev.id] = true;
+    mostrarToast("¡SOS! Alarma de pánico desde " + v.nombre, "error");
+    renderAlarmas();
+    guardarEventosLocal();
+  }
+
+  function detectarSosDesdePosiciones() {
+    vehiculos.forEach(function (v) {
+      var actual = v.sos ? String(v.sos) : "";
+      var tienePrevio = Object.prototype.hasOwnProperty.call(sosVistos, v.id);
+      var previo = tienePrevio ? sosVistos[v.id] : null;
+      if (!tienePrevio) {
+        sosVistos[v.id] = actual;
+        if (actual) agregarEventoSos(v);
+        return;
+      }
+      if (actual && actual !== previo) {
+        sosVistos[v.id] = actual;
+        agregarEventoSos(v);
+        return;
+      }
+      sosVistos[v.id] = actual;
+    });
+  }
+
   function renderAlarmas() {
     var contenedor = $("#alarmas");
     var total = $("#alarmas-num");
@@ -924,16 +1001,18 @@
       geofenceEnter: ["success", "Entró a"],
       geofenceExit: ["warning", "Salió de"],
       geofence: ["info", "Geozona"],
-      alarm: ["danger", "SOS"]
+      alarm: ["danger", "SOS"],
+      sos: ["danger", "SOS"]
     };
+    var esSos = esAlarmatipo(e.tipo);
     var mi = mapaTipo[e.tipo] || ["neutral", e.tipo];
-    var texto = e.tipo === "alarm"
+    var texto = esSos
       ? "Alarma SOS · " + e.vehiculo
       : e.vehiculo + " " + mi[1] + " " + (e.geozona || "una geozona");
-    var encabezado = e.tipo === "alarm"
-      ? '<span class="badge badge--danger">' + mi[1] + '</span>'
+    var encabezado = esSos
+      ? '<span class="badge badge--danger">SOS</span>'
       : '<span class="badge badge--' + mi[0] + '">' + mi[1] + '</span>';
-    return '<div class="evento' + (e.tipo === "alarm" ? " evento--alarma" : "") + '">' +
+    return '<div class="evento' + (esSos ? " evento--alarma" : "") + '">' +
       encabezado +
       '<span>' + esc(texto) + (e.hora ? ' · <span style="font-size:85%">' + desdeHace(e.hora) + '</span>' : '') + '</span>' +
       '<span class="evento__time" title="' + (e.hora ? esc(fechaHoraLocal(e.hora)) : "") + '">' + (e.hora ? fechaHoraLocal(e.hora) : "") + '</span>' +
@@ -941,10 +1020,11 @@
   }
 
   function notificarEvento(e) {
-    var tipo = { geofenceEnter: "success", geofenceExit: "warning", geofence: "info", alarm: "error" }[e.type] || "info";
+    var esSos = esAlarmatipo(e.type);
+    var tipo = { geofenceEnter: "success", geofenceExit: "warning", geofence: "info", alarm: "error", sos: "error" }[e.type] || "info";
     var nombreV = vehiculoNombre(e.deviceId);
     var nombreG = geozonaNombre(e.geofenceId);
-    var msg = e.type === "alarm"
+    var msg = esSos
       ? "¡SOS! Alarma de pánico desde " + nombreV
       : nombreV + (e.type === "geofenceEnter" ? " entró a " : " salió de ") + (nombreG || "una geozona");
     mostrarToast(msg, tipo);
@@ -1655,26 +1735,114 @@
   var pbMarcadoresInicio = [];
   var pbMarcadoresFin = [];
 
+  function calcularViajes(todasPos) {
+    var UMbralParada = 5;
+    var umbralDistancia = 0.1;
+    var umbralTiempo = 2;
+    var umbralMovM = 15;
+    var viajesCalc = [];
+    var actual = null;
+
+    function seMovio(i) {
+      if (i <= 0) return false;
+      var p0 = todasPos[i - 1];
+      var p1 = todasPos[i];
+      var vel = p1.speed ? Math.round(p1.speed * 1.852) : 0;
+      if (vel > 0) return true;
+      var d = distanciaKm(p0.latitude, p0.longitude, p1.latitude, p1.longitude) * 1000;
+      return d >= umbralMovM;
+    }
+
+    function velDe(p) {
+      return p.speed ? Math.round(p.speed * 1.852) : 0;
+    }
+
+    for (var i = 0; i < todasPos.length; i++) {
+      var vel = velDe(todasPos[i]);
+      var moviendo = seMovio(i);
+      if ((vel > 0 || moviendo) && !actual) {
+        actual = {
+          startTime: todasPos[i].fixTime,
+          startLat: todasPos[i].latitude,
+          startLon: todasPos[i].longitude,
+          puntos: [todasPos[i]],
+          km: 0,
+          maxSpeed: vel,
+          distance: 0
+        };
+      } else if (actual) {
+        actual.puntos.push(todasPos[i]);
+        var dist = distanciaKm(todasPos[i - 1].latitude, todasPos[i - 1].longitude, todasPos[i].latitude, todasPos[i].longitude);
+        actual.km += dist;
+        if (vel > actual.maxSpeed) actual.maxSpeed = vel;
+        var quieto = vel === 0 && !moviendo;
+        if (quieto) {
+          var tiempoQuietos = 0;
+          for (var j = i + 1; j < todasPos.length; j++) {
+            if (seMovio(j) || velDe(todasPos[j]) > 0) break;
+            tiempoQuietos = (new Date(todasPos[j].fixTime) - new Date(todasPos[i].fixTime)) / 60000;
+          }
+          if (tiempoQuietos >= UMbralParada || i === todasPos.length - 1) {
+            actual.endTime = todasPos[i].fixTime;
+            actual.endLat = todasPos[i].latitude;
+            actual.endLon = todasPos[i].longitude;
+            actual.distance = actual.km * 1000;
+            var durMin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
+            if (actual.km >= umbralDistancia && durMin >= umbralTiempo) {
+              viajesCalc.push(actual);
+            }
+            actual = null;
+          }
+        }
+      }
+    }
+    if (actual && actual.puntos.length > 1) {
+      actual.endTime = todasPos[todasPos.length - 1].fixTime;
+      actual.endLat = todasPos[todasPos.length - 1].latitude;
+      actual.endLon = todasPos[todasPos.length - 1].longitude;
+      actual.distance = actual.km * 1000;
+      var durFin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
+      if (actual.km >= umbralDistancia && durFin >= umbralTiempo) {
+        viajesCalc.push(actual);
+      }
+    }
+    return viajesCalc;
+  }
+
+  function histLocalIso(val) {
+    var d = new Date(val);
+    if (isNaN(d.getTime())) return "";
+    var y = d.getFullYear();
+    var mo = String(d.getMonth() + 1).padStart(2, "0");
+    var dia = String(d.getDate()).padStart(2, "0");
+    var h = String(d.getHours()).padStart(2, "0");
+    var min = String(d.getMinutes()).padStart(2, "0");
+    var off = -d.getTimezoneOffset();
+    var sign = off >= 0 ? "+" : "-";
+    var offH = String(Math.floor(Math.abs(off) / 60)).padStart(2, "0");
+    var offM = String(Math.abs(off) % 60).padStart(2, "0");
+    return y + "-" + mo + "-" + dia + "T" + h + ":" + min + ":00" + sign + offH + ":" + offM;
+  }
+
+  function posicionesRango(deviceId, desdeIso, hastaIso) {
+    var q = "/positions?deviceId=" + encodeURIComponent(deviceId) +
+      "&from=" + encodeURIComponent(desdeIso) +
+      "&to=" + encodeURIComponent(hastaIso);
+    return llamarApi(q, null, { timeoutMs: 60000 });
+  }
+
   function cargarHistorial() {
     var id = parseInt($("#hist-vehiculo").value, 10);
     var desde = $("#hist-desde").value;
     var hasta = $("#hist-hasta").value;
+    if (!desde || !hasta) {
+      aplicarRangoHistorial("hoy");
+      desde = $("#hist-desde").value;
+      hasta = $("#hist-hasta").value;
+    }
     if (!id || !desde || !hasta) {
       mostrarToast("Seleccioná vehículo y rango de tiempo.", "error");
       return;
-    }
-    function histLocalIso(val) {
-      var d = new Date(val);
-      var y = d.getFullYear();
-      var mo = String(d.getMonth() + 1).padStart(2, "0");
-      var dia = String(d.getDate()).padStart(2, "0");
-      var h = String(d.getHours()).padStart(2, "0");
-      var min = String(d.getMinutes()).padStart(2, "0");
-      var off = -d.getTimezoneOffset();
-      var sign = off >= 0 ? "+" : "-";
-      var offH = String(Math.floor(Math.abs(off) / 60)).padStart(2, "0");
-      var offM = String(Math.abs(off) % 60).padStart(2, "0");
-      return y + "-" + mo + "-" + dia + "T" + h + ":" + min + ":00" + sign + offH + ":" + offM;
     }
     if (!mapa || typeof L === "undefined") {
       mostrarToast("El mapa no está disponible.", "error");
@@ -1688,9 +1856,13 @@
     $("#hist-controles").style.display = "none";
     var desdeIso = histLocalIso(desde);
     var hastaIso = histLocalIso(hasta);
+    if (!desdeIso || !hastaIso) {
+      mostrarToast("Fechas inválidas.", "error");
+      return;
+    }
     var info = $("#hist-info");
     info.textContent = "Cargando...";
-    llamarApi("/positions?deviceId=" + id + "&from=" + desdeIso + "&to=" + hastaIso)
+    posicionesRango(id, desdeIso, hastaIso)
       .then(function (todasPos) {
       todasPos = Array.isArray(todasPos) ? todasPos : [];
       todasPos.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
@@ -1698,52 +1870,27 @@
         info.textContent = "No hay posiciones en ese rango de tiempo.";
         return;
       }
-      var UMbralParada = 5;
-      var umbralDistancia = 0.1;
-      var umbralTiempo = 2;
-      var viajesCalc = [];
-      var actual = null;
-      for (var i = 0; i < todasPos.length; i++) {
-        var vel = todasPos[i].speed ? Math.round(todasPos[i].speed * 1.852) : 0;
-        if (vel > 0 && !actual) {
-          actual = { startTime: todasPos[i].fixTime, startLat: todasPos[i].latitude, startLon: todasPos[i].longitude, puntos: [todasPos[i]], km: 0, maxSpeed: vel, distance: 0 };
-        } else if (actual) {
-          actual.puntos.push(todasPos[i]);
-          if (i > 0) {
-            var dist = distanciaKm(todasPos[i - 1].latitude, todasPos[i - 1].longitude, todasPos[i].latitude, todasPos[i].longitude);
-            actual.km += dist;
-          }
-          if (vel > actual.maxSpeed) actual.maxSpeed = vel;
-          if (vel === 0) {
-            var tiempoQuietos = 0;
-            for (var j = i + 1; j < todasPos.length; j++) {
-              var vj = todasPos[j].speed ? Math.round(todasPos[j].speed * 1.852) : 0;
-              if (vj > 0) break;
-              tiempoQuietos = (new Date(todasPos[j].fixTime) - new Date(todasPos[i].fixTime)) / 60000;
-            }
-            if (tiempoQuietos >= UMbralParada || i === todasPos.length - 1) {
-              actual.endTime = todasPos[i].fixTime;
-              actual.endLat = todasPos[i].latitude;
-              actual.endLon = todasPos[i].longitude;
-              actual.distance = actual.km * 1000;
-              var durMin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
-              if (actual.km >= umbralDistancia && durMin >= umbralTiempo) {
-                viajesCalc.push(actual);
-              }
-              actual = null;
-            }
-          }
+      var viajesCalc = calcularViajes(todasPos);
+      if (!viajesCalc.length && todasPos.length >= 2) {
+        var kmTodo = 0;
+        for (var k = 1; k < todasPos.length; k++) {
+          kmTodo += distanciaKm(todasPos[k - 1].latitude, todasPos[k - 1].longitude, todasPos[k].latitude, todasPos[k].longitude);
         }
-      }
-      if (actual && actual.puntos.length > 1) {
-        actual.endTime = todasPos[todasPos.length - 1].fixTime;
-        actual.endLat = todasPos[todasPos.length - 1].latitude;
-        actual.endLon = todasPos[todasPos.length - 1].longitude;
-        actual.distance = actual.km * 1000;
-        var durFin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
-        if (actual.km >= umbralDistancia && durFin >= umbralTiempo) {
-          viajesCalc.push(actual);
-        }
+        viajesCalc = [{
+          startTime: todasPos[0].fixTime,
+          endTime: todasPos[todasPos.length - 1].fixTime,
+          startLat: todasPos[0].latitude,
+          startLon: todasPos[0].longitude,
+          endLat: todasPos[todasPos.length - 1].latitude,
+          endLon: todasPos[todasPos.length - 1].longitude,
+          puntos: todasPos,
+          km: kmTodo,
+          maxSpeed: todasPos.reduce(function (mx, p) {
+            var v = p.speed ? Math.round(p.speed * 1.852) : 0;
+            return v > mx ? v : mx;
+          }, 0),
+          distance: kmTodo * 1000
+        }];
       }
       if (!viajesCalc.length) {
         info.textContent = "No hay viajes en ese rango de tiempo.";
@@ -1979,7 +2126,13 @@
     }
     Promise.all(vehiculos.map(function (v) {
       return Promise.race([
-        llamarApi("/positions?deviceId=" + v.id + "&from=" + desdeIso + "&to=" + hastaIso),
+        llamarApi(
+          "/positions?deviceId=" + encodeURIComponent(v.id) +
+            "&from=" + encodeURIComponent(desdeIso) +
+            "&to=" + encodeURIComponent(hastaIso),
+          null,
+          { timeoutMs: 60000 }
+        ),
         new Promise(function (_, reject) { setTimeout(function () { reject(new Error("timeout")); }, 15000); })
       ]).then(function (pos) {
         var arr = Array.isArray(pos) ? pos : [];
@@ -2343,14 +2496,13 @@
     var referencias = v.tienePosicion ? buscarReferenciasCercanas(v.lat, v.lon, 7) : [];
     var refsHtml = "";
     if (referencias.length) {
-      refsHtml = '<div class="vehicle__refs"><span class="vehicle__refs-title">📍 Cerca de:</span>';
-      for (var ri = 0; ri < referencias.length && ri < 2; ri++) {
-        var iconoRef = referencias[ri].tipo === "hospital" ? "🏥" : "📌";
-        var nombre = referencias[ri].nombre;
-        if (nombre.length > 25) nombre = nombre.substring(0, 25) + "...";
-        refsHtml += '<span class="vehicle__ref">' + iconoRef + ' <span class="vehicle__ref-name">' + esc(nombre) + '</span> <span class="vehicle__ref-dist">(' + referencias[ri].distancia.toFixed(1) + ' km)</span></span>';
-      }
-      refsHtml += '</div>';
+      var ref = referencias[0];
+      var iconoRef = ref.tipo === "hospital" ? "🏥" : "📌";
+      var nombre = ref.nombre;
+      if (nombre.length > 25) nombre = nombre.substring(0, 25) + "...";
+      refsHtml = '<div class="vehicle__refs"><span class="vehicle__refs-title">📍 Cerca de:</span>' +
+        '<span class="vehicle__ref">' + iconoRef + ' <span class="vehicle__ref-name">' + esc(nombre) + '</span> <span class="vehicle__ref-dist">(' + ref.distancia.toFixed(1) + ' km)</span></span>' +
+        '</div>';
     }
     return '<article class="card vehicle vehicle--' + v.estado.tipo + '">' +
       '<header class="vehicle__head">' +
@@ -2972,7 +3124,12 @@
     $("#btn-limpiar-alarmas").addEventListener("click", function () {
       eventos = [];
       idsVistos = {};
+      sosVistos = {};
+      vehiculos.forEach(function (v) {
+        sosVistos[v.id] = v.sos ? String(v.sos) : "";
+      });
       renderAlarmas();
+      guardarEventosLocal();
     });
 
     $("#btn-abrir-conductores").addEventListener("click", function (e) {
