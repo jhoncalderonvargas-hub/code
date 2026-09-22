@@ -10,6 +10,28 @@
   <link rel="stylesheet" href="assets/css/main.css">
 </head>
 <body>
+  <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></symbol>
+    <symbol id="i-car" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+    <symbol id="i-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h6"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-hospital" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v4"/><path d="M14 14h-4"/><path d="M14 18h-4"/><path d="M14 8h-4"/><path d="M18 12h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2h2"/><path d="M18 22V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v18"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol>
+    <symbol id="i-circle-dot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></symbol>
+  </svg>
   <a class="skip-link" href="#contenido">Saltar al contenido</a>
   <div class="app-shell">
     <header class="topbar">
@@ -48,7 +70,7 @@
         <span><span class="brand__name">FLOTA</span><span class="brand__description">Gestor de flota · GPS Traccar</span></span>
       </a>
       <div class="user-summary" aria-label="Usuario actual">
-        <button class="button button--icon" id="btn-modo-oscuro" type="button" title="Modo oscuro">🌙</button>
+        <button class="button button--icon" id="btn-modo-oscuro" type="button" title="Modo oscuro" aria-label="Cambiar modo oscuro"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
         <span class="avatar" aria-hidden="true">OP</span>
         <span><strong>Operador de flota</strong><span class="user-summary__meta">Administrador</span></span>
       </div>
@@ -60,16 +82,16 @@
       <aside class="sidebar" aria-label="Navegación principal">
         <nav>
           <ul class="nav-list">
-            <li><a class="nav-link" href="#panel" aria-current="page"><span class="nav-icon" aria-hidden="true">📊</span>Panel</a></li>
-            <li><a class="nav-link" href="#seccion-vehiculos"><span class="nav-icon" aria-hidden="true">🚗</span>Vehículos</a></li>
-            <li><a class="nav-link" href="#seccion-mapa"><span class="nav-icon" aria-hidden="true">🗺️</span>Mapa</a></li>
-            <li><a class="nav-link" href="#seccion-historial"><span class="nav-icon" aria-hidden="true">🛣️</span>Historial</a></li>
-            <li><a class="nav-link" href="#seccion-alarmas"><span class="nav-icon" aria-hidden="true">🔔</span>Alarmas</a></li>
-            <li><a class="nav-link" href="#seccion-reportes"><span class="nav-icon" aria-hidden="true">📋</span>Reportes</a></li>
-            <li><a class="nav-link" href="#seccion-geozonas"><span class="nav-icon" aria-hidden="true">📍</span>Geozonas</a></li>
-            <li><a class="nav-link" href="#seccion-hospitales"><span class="nav-icon" aria-hidden="true">🏥</span>Hospitales</a></li>
-            <li><a class="nav-link" href="#" data-abrir-configuracion><span class="nav-icon" aria-hidden="true">⚙️</span>Configuración</a></li>
-            <li><a class="nav-link" href="#" id="btn-abrir-conductores"><span class="nav-icon" aria-hidden="true">👤</span>Conductores</a></li>
+            <li><a class="nav-link" href="#panel" aria-current="page"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-grid"/></svg></span>Panel</a></li>
+            <li><a class="nav-link" href="#seccion-vehiculos"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-car"/></svg></span>Vehículos</a></li>
+            <li><a class="nav-link" href="#seccion-mapa"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-map"/></svg></span>Mapa</a></li>
+            <li><a class="nav-link" href="#seccion-historial"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-route"/></svg></span>Historial</a></li>
+            <li><a class="nav-link" href="#seccion-alarmas"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-bell"/></svg></span>Alarmas</a></li>
+            <li><a class="nav-link" href="#seccion-reportes"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-clipboard"/></svg></span>Reportes</a></li>
+            <li><a class="nav-link" href="#seccion-geozonas"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-pin"/></svg></span>Geozonas</a></li>
+            <li><a class="nav-link" href="#seccion-hospitales"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-hospital"/></svg></span>Hospitales</a></li>
+            <li><a class="nav-link" href="#" data-abrir-configuracion><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-settings"/></svg></span>Configuración</a></li>
+            <li><a class="nav-link" href="#" id="btn-abrir-conductores"><span class="nav-icon" aria-hidden="true"><svg class="icon"><use href="#i-user"/></svg></span>Conductores</a></li>
           </ul>
         </nav>
       </aside>
@@ -129,29 +151,29 @@
             <div class="layer-control" id="layer-control">
               <div class="layer-control__title">Capas</div>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-vehiculos" checked> 🚗 Vehículos
+                <input type="checkbox" id="layer-vehiculos" checked> <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg> Vehículos
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-geozonas" checked> ◎ Geozonas
+                <input type="checkbox" id="layer-geozonas" checked> <svg class="icon" aria-hidden="true"><use href="#i-circle-dot"/></svg> Geozonas
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-pois" checked> 📍 POIs
+                <input type="checkbox" id="layer-pois" checked> <svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg> POIs
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-hospitales"> 🏥 Hospitales
+                <input type="checkbox" id="layer-hospitales"> <svg class="icon" aria-hidden="true"><use href="#i-hospital"/></svg> Hospitales
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-cobertura"> ⭕ Cobertura
+                <input type="checkbox" id="layer-cobertura"> <svg class="icon" aria-hidden="true"><use href="#i-circle"/></svg> Cobertura
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-ruta" checked> 🛤️ Historial
+                <input type="checkbox" id="layer-ruta" checked> <svg class="icon" aria-hidden="true"><use href="#i-route"/></svg> Historial
               </label>
             </div>
             <div class="map-dark-toggle" id="map-dark-toggle">
               <label class="map-dark-toggle__label">
                 <input type="checkbox" id="layer-mapa-oscuro">
-                <span class="map-dark-toggle__icon">🌙</span>
-                <span class="map-dark-toggle__text">Oscuro</span>
+                <span class="map-dark-toggle__icon"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></span>
+                <span class="map-dark-toggle__text">Modo oscuro</span>
               </label>
             </div>
           </div>
@@ -161,9 +183,9 @@
                 <span id="pb-fecha" style="min-width:160px;"></span>
                 <input type="range" id="pb-slider" min="0" max="100" value="0" style="flex:1;">
                 <div class="cluster">
-                  <button class="button button--icon" id="pb-prev" type="button" title="Viaje anterior">◀</button>
-                  <button class="button button--icon" id="pb-next" type="button" title="Siguiente viaje">▶</button>
-                  <button class="button button--filled button--play" id="pb-play" type="button" title="Reproducir ruta">⏵</button>
+                  <button class="button button--icon" id="pb-prev" type="button" title="Viaje anterior" aria-label="Viaje anterior"><svg class="icon" aria-hidden="true"><use href="#i-chevron-left"/></svg></button>
+                  <button class="button button--icon" id="pb-next" type="button" title="Siguiente viaje" aria-label="Siguiente viaje"><svg class="icon" aria-hidden="true"><use href="#i-chevron-right"/></svg></button>
+                  <button class="button button--filled button--play" id="pb-play" type="button" title="Reproducir ruta" aria-label="Reproducir ruta"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
                   <button class="button button--outlined" id="btn-exportar-gpx" type="button" title="Exportar GPX" style="font-size:0.75rem;">GPX</button>
                   <select id="pb-velocidad" class="filtro-select" style="width:auto;">
                     <option value="1">1x</option>
@@ -301,7 +323,7 @@
           </div>
           <div class="hospital-summary" id="hospital-summary">
             <div class="hospital-summary__content"></div>
-            <button class="hospital-summary__expand" id="btn-expandir-hospitales" type="button" title="Mostrar todos">＋</button>
+            <button class="hospital-summary__expand" id="btn-expandir-hospitales" type="button" title="Mostrar todos" aria-label="Mostrar todos"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
           </div>
           <div class="hospital-expand" id="hospital-expand" hidden>
             <div class="grid geozonas-grid" id="hospitales"></div>
@@ -464,12 +486,12 @@
           <div class="field">
             <label for="poi-tipo">Tipo</label>
             <select id="poi-tipo">
-              <option value="pin">📍 Pin</option>
-              <option value="bodega">🏭 Bodega</option>
-              <option value="cliente">👤 Cliente</option>
-              <option value="gasolinera">⛽ Gasolinera</option>
-              <option value="taller">🔧 Taller</option>
-              <option value="oficina">🏢 Oficina</option>
+              <option value="pin">Pin</option>
+              <option value="bodega">Bodega</option>
+              <option value="cliente">Cliente</option>
+              <option value="gasolinera">Gasolinera</option>
+              <option value="taller">Taller</option>
+              <option value="oficina">Oficina</option>
             </select>
           </div>
           <div class="field">

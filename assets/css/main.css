@@ -304,10 +304,29 @@ a {
 }
 
 .nav-icon {
-  width: 1.2rem;
-  text-align: center;
-  font-size: 1rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   opacity: 0.85;
+}
+
+.icon {
+  width: 1.15em;
+  height: 1.15em;
+  display: inline-block;
+  vertical-align: -0.18em;
+  flex-shrink: 0;
+}
+
+.nav-icon .icon,
+.button .icon,
+.map-dark-toggle__icon .icon,
+.hospital-summary__expand .icon {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .page {
@@ -414,9 +433,10 @@ a {
   color: #fff;
   border: 1px solid var(--primary);
   border-radius: var(--radius-sm);
-  padding: 0.4rem 0.6rem;
+  padding: 0.45rem 0.55rem;
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 1rem;
+  line-height: 1;
   transition: all var(--transition);
 }
 
@@ -426,8 +446,8 @@ a {
 }
 
 .button--play {
-  font-size: 1.3rem;
-  padding: 0.4rem 0.8rem;
+  font-size: 1rem;
+  padding: 0.45rem 0.7rem;
   min-width: 2.5rem;
   border-radius: 50%;
   width: 2.5rem;
@@ -1161,12 +1181,9 @@ a {
 }
 
 .map-dark-toggle__icon {
-  font-size: 1rem;
+  display: inline-flex;
+  align-items: center;
   transition: transform 0.3s ease;
-}
-
-.map-dark-toggle__label input:checked ~ .map-dark-toggle__icon {
-  transform: rotate(180deg);
 }
 
 .map-dark-toggle__label input:checked ~ .map-dark-toggle__text {
@@ -1523,8 +1540,7 @@ a {
   border-radius: var(--radius-sm);
   width: 2.4rem;
   height: 2.4rem;
-  font-size: 1.4rem;
-  font-weight: 700;
+  font-size: 1rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;

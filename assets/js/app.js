@@ -1569,8 +1569,11 @@
       expandBtn.onclick = function () {
         var visible = !expandSection.hidden;
         expandSection.hidden = visible;
-        expandBtn.textContent = visible ? "＋" : "−";
+        expandBtn.innerHTML = visible
+          ? '<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>'
+          : '<svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg>';
         expandBtn.title = visible ? "Mostrar todos" : "Ocultar";
+        expandBtn.setAttribute("aria-label", expandBtn.title);
       };
     }
   }
@@ -1842,7 +1845,8 @@
 
   function detenerPlayback() {
     if (pbIntervalo) { clearInterval(pbIntervalo); pbIntervalo = null; }
-    $("#pb-play").textContent = "⏵";
+    $("#pb-play").innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-play"/></svg>';
+    $("#pb-play").setAttribute("aria-label", "Reproducir ruta");
   }
 
   function togglePlayback() {
@@ -1857,7 +1861,8 @@
       }
       if (pbIndex >= pbDetalles.length - 1) { pbIndex = 0; }
       document.getElementById("seccion-mapa").scrollIntoView({ behavior: "smooth" });
-      $("#pb-play").textContent = "⏸";
+      $("#pb-play").innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg>';
+      $("#pb-play").setAttribute("aria-label", "Pausar ruta");
       var vel = parseInt($("#pb-velocidad").value, 10) || 3;
       var posIdx = 0;
       var posiciones = detalle.posiciones;
@@ -2206,16 +2211,23 @@
   }
 
   function estadoVehiculo(d, p) {
-    var LAPSO = 5 * 60 * 1000;
+    var LAPSO = 15 * 60 * 1000;
+    var edades = [];
+    if (d.lastUpdate) {
+      edades.push(Date.now() - new Date(d.lastUpdate).getTime());
+    }
+    if (p) {
+      edades.push(Date.now() - new Date(p.fixTime).getTime());
+      if (p.serverTime) edades.push(Date.now() - new Date(p.serverTime).getTime());
+    }
+    if (!edades.length) return { tipo: "nodata", etiqueta: "Sin datos" };
+    var edad = Math.min.apply(null, edades);
     if (!p) {
       return {
         tipo: "nodata",
-        etiqueta: d.lastUpdate && Date.now() - new Date(d.lastUpdate).getTime() > LAPSO ? "Sin señal" : "Sin datos"
+        etiqueta: edad > LAPSO ? "Sin señal" : "Sin datos"
       };
     }
-    var edadFix = Date.now() - new Date(p.fixTime).getTime();
-    var edadServer = p.serverTime ? Date.now() - new Date(p.serverTime).getTime() : edadFix;
-    var edad = Math.min(edadFix, edadServer);
     if (edad > LAPSO) return { tipo: "offline", etiqueta: "Sin señal" };
     var kmh = Math.round((p.speed || 0) * 1.852);
     if (kmh > 1) return { tipo: "moving", etiqueta: "En movimiento" };
@@ -2352,7 +2364,7 @@
         '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
         '<div><span class="vehicle__stat-label">Conductor</span><span class="vehicle__stat-value">' + esc(conductor || "Sin asignar") + '</span></div>' +
       '</div>' +
-      '<div class="vehicle__actions"><button class="button button--outlined" type="button" data-abrir-modal-vehiculo="' + v.id + '">＋ Ver detalles</button>' + (v.tienePosicion ? mapLink : '') + '</div>' +
+      '<div class="vehicle__actions"><button class="button button--outlined" type="button" data-abrir-modal-vehiculo="' + v.id + '"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> Ver detalles</button>' + (v.tienePosicion ? mapLink : '') + '</div>' +
     '</article>';
   }
 
@@ -2985,9 +2997,17 @@
       document.body.classList.toggle("modo-oscuro");
       var activo = document.body.classList.contains("modo-oscuro");
       localStorage.setItem(CLAVE_MODO_OSCURO, activo);
-      this.textContent = activo ? "☀️" : "🌙";
+      this.innerHTML = activo
+        ? '<svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg>'
+        : '<svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg>';
+      this.title = activo ? "Modo claro" : "Modo oscuro";
+      this.setAttribute("aria-label", this.title);
     });
-    if (modoOscuroGuardado) $("#btn-modo-oscuro").textContent = "☀️";
+    if (modoOscuroGuardado) {
+      $("#btn-modo-oscuro").innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-sun"/></svg>';
+      $("#btn-modo-oscuro").title = "Modo claro";
+      $("#btn-modo-oscuro").setAttribute("aria-label", "Modo claro");
+    }
 
     $("#btn-nuevo-poi").addEventListener("click", abrirModalPoi);
     $("#poi-cerrar").addEventListener("click", cerrarModalPoi);
@@ -3072,10 +3092,20 @@
 
     var mapaOscuroCheck = document.getElementById("layer-mapa-oscuro");
     if (mapaOscuroCheck) {
+      function actualizarLabelMapaOscuro(activo) {
+        var icono = document.querySelector("#map-dark-toggle .map-dark-toggle__icon");
+        var texto = document.querySelector("#map-dark-toggle .map-dark-toggle__text");
+        if (icono) icono.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#' + (activo ? "i-sun" : "i-moon") + '"/></svg>';
+        if (texto) texto.textContent = activo ? "Modo claro" : "Modo oscuro";
+      }
       var guardadoOscuro = localStorage.getItem(CLAVE_MAPA_OSCURO);
-      if (guardadoOscuro === "true") mapaOscuroCheck.checked = true;
+      if (guardadoOscuro === "true") {
+        mapaOscuroCheck.checked = true;
+        actualizarLabelMapaOscuro(true);
+      }
       mapaOscuroCheck.addEventListener("change", function () {
         alternarMapaOscuro(this.checked);
+        actualizarLabelMapaOscuro(this.checked);
       });
     }
 
