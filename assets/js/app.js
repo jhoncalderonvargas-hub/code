@@ -655,7 +655,7 @@
     return fetch(base + "/api" + ruta, op).then(function (r) {
       if (r.status === 401) throw new Error("Acceso no autorizado (401). Revisa token o credenciales.");
       if (r.status === 403) throw new Error("Sin permisos (403).");
-      if (r.status === 404) throw new Error("Respuesta 404. Revisa la URL base.");
+      if (r.status === 404) throw new Error("Respuesta 404 en " + ruta.split("?")[0] + ". Revisa la URL base.");
       if (r.status === 502) throw new Error("El proxy no alcanzó a Traccar (502). ¿Está corriendo el servidor?");
       if (!r.ok) throw new Error("La API respondió con estado " + r.status + ".");
       if (r.status === 204) return null;
@@ -1735,80 +1735,6 @@
   var pbMarcadoresInicio = [];
   var pbMarcadoresFin = [];
 
-  function calcularViajes(todasPos) {
-    var UMbralParada = 5;
-    var umbralDistancia = 0.1;
-    var umbralTiempo = 2;
-    var umbralMovM = 15;
-    var viajesCalc = [];
-    var actual = null;
-
-    function seMovio(i) {
-      if (i <= 0) return false;
-      var p0 = todasPos[i - 1];
-      var p1 = todasPos[i];
-      var vel = p1.speed ? Math.round(p1.speed * 1.852) : 0;
-      if (vel > 0) return true;
-      var d = distanciaKm(p0.latitude, p0.longitude, p1.latitude, p1.longitude) * 1000;
-      return d >= umbralMovM;
-    }
-
-    function velDe(p) {
-      return p.speed ? Math.round(p.speed * 1.852) : 0;
-    }
-
-    for (var i = 0; i < todasPos.length; i++) {
-      var vel = velDe(todasPos[i]);
-      var moviendo = seMovio(i);
-      if ((vel > 0 || moviendo) && !actual) {
-        actual = {
-          startTime: todasPos[i].fixTime,
-          startLat: todasPos[i].latitude,
-          startLon: todasPos[i].longitude,
-          puntos: [todasPos[i]],
-          km: 0,
-          maxSpeed: vel,
-          distance: 0
-        };
-      } else if (actual) {
-        actual.puntos.push(todasPos[i]);
-        var dist = distanciaKm(todasPos[i - 1].latitude, todasPos[i - 1].longitude, todasPos[i].latitude, todasPos[i].longitude);
-        actual.km += dist;
-        if (vel > actual.maxSpeed) actual.maxSpeed = vel;
-        var quieto = vel === 0 && !moviendo;
-        if (quieto) {
-          var tiempoQuietos = 0;
-          for (var j = i + 1; j < todasPos.length; j++) {
-            if (seMovio(j) || velDe(todasPos[j]) > 0) break;
-            tiempoQuietos = (new Date(todasPos[j].fixTime) - new Date(todasPos[i].fixTime)) / 60000;
-          }
-          if (tiempoQuietos >= UMbralParada || i === todasPos.length - 1) {
-            actual.endTime = todasPos[i].fixTime;
-            actual.endLat = todasPos[i].latitude;
-            actual.endLon = todasPos[i].longitude;
-            actual.distance = actual.km * 1000;
-            var durMin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
-            if (actual.km >= umbralDistancia && durMin >= umbralTiempo) {
-              viajesCalc.push(actual);
-            }
-            actual = null;
-          }
-        }
-      }
-    }
-    if (actual && actual.puntos.length > 1) {
-      actual.endTime = todasPos[todasPos.length - 1].fixTime;
-      actual.endLat = todasPos[todasPos.length - 1].latitude;
-      actual.endLon = todasPos[todasPos.length - 1].longitude;
-      actual.distance = actual.km * 1000;
-      var durFin = (new Date(actual.endTime) - new Date(actual.startTime)) / 60000;
-      if (actual.km >= umbralDistancia && durFin >= umbralTiempo) {
-        viajesCalc.push(actual);
-      }
-    }
-    return viajesCalc;
-  }
-
   function histLocalIso(val) {
     var d = new Date(val);
     if (isNaN(d.getTime())) return "";
@@ -1826,6 +1752,20 @@
 
   function posicionesRango(deviceId, desdeIso, hastaIso) {
     var q = "/positions?deviceId=" + encodeURIComponent(deviceId) +
+      "&from=" + encodeURIComponent(desdeIso) +
+      "&to=" + encodeURIComponent(hastaIso);
+    return llamarApi(q, null, { timeoutMs: 60000 });
+  }
+
+  function reporteRutaTraccar(deviceId, desdeIso, hastaIso) {
+    var q = "/reports/route?deviceId=" + encodeURIComponent(deviceId) +
+      "&from=" + encodeURIComponent(desdeIso) +
+      "&to=" + encodeURIComponent(hastaIso);
+    return llamarApi(q, null, { timeoutMs: 60000 });
+  }
+
+  function reporteViajesTraccar(deviceId, desdeIso, hastaIso) {
+    var q = "/reports/trips?deviceId=" + encodeURIComponent(deviceId) +
       "&from=" + encodeURIComponent(desdeIso) +
       "&to=" + encodeURIComponent(hastaIso);
     return llamarApi(q, null, { timeoutMs: 60000 });
@@ -1862,42 +1802,73 @@
     }
     var info = $("#hist-info");
     info.textContent = "Cargando...";
-    posicionesRango(id, desdeIso, hastaIso)
-      .then(function (todasPos) {
-      todasPos = Array.isArray(todasPos) ? todasPos : [];
-      todasPos.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
-      if (!todasPos.length) {
-        info.textContent = "No hay posiciones en ese rango de tiempo.";
-        return;
-      }
-      var viajesCalc = calcularViajes(todasPos);
-      if (!viajesCalc.length && todasPos.length >= 2) {
-        var kmTodo = 0;
-        for (var k = 1; k < todasPos.length; k++) {
-          kmTodo += distanciaKm(todasPos[k - 1].latitude, todasPos[k - 1].longitude, todasPos[k].latitude, todasPos[k].longitude);
-        }
-        viajesCalc = [{
-          startTime: todasPos[0].fixTime,
-          endTime: todasPos[todasPos.length - 1].fixTime,
-          startLat: todasPos[0].latitude,
-          startLon: todasPos[0].longitude,
-          endLat: todasPos[todasPos.length - 1].latitude,
-          endLon: todasPos[todasPos.length - 1].longitude,
-          puntos: todasPos,
-          km: kmTodo,
-          maxSpeed: todasPos.reduce(function (mx, p) {
-            var v = p.speed ? Math.round(p.speed * 1.852) : 0;
-            return v > mx ? v : mx;
-          }, 0),
-          distance: kmTodo * 1000
-        }];
-      }
-      if (!viajesCalc.length) {
+    Promise.all([
+      reporteViajesTraccar(id, desdeIso, hastaIso),
+      reporteRutaTraccar(id, desdeIso, hastaIso)
+    ]).then(function (res) {
+      var tripsApi = Array.isArray(res[0]) ? res[0] : [];
+      var ruta = Array.isArray(res[1]) ? res[1] : [];
+      ruta.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
+      if (!tripsApi.length && !ruta.length) {
         info.textContent = "No hay viajes en ese rango de tiempo.";
         return;
       }
-      var viajes = viajesCalc;
+      var viajes = tripsApi.map(function (t) {
+        var ini = new Date(t.startTime).getTime();
+        var fin = new Date(t.endTime).getTime();
+        var puntos = ruta.filter(function (p) {
+          var ft = new Date(p.fixTime).getTime();
+          return ft >= ini && ft <= fin;
+        });
+        if (!puntos.length && t.startLat != null && t.endLat != null) {
+          puntos = [
+            { latitude: t.startLat, longitude: t.startLon, fixTime: t.startTime, speed: 0 },
+            { latitude: t.endLat, longitude: t.endLon, fixTime: t.endTime, speed: 0 }
+          ];
+        }
+        var maxKnots = 0;
+        puntos.forEach(function (p) {
+          if (p.speed && p.speed > maxKnots) maxKnots = p.speed;
+        });
+        if (!maxKnots && typeof t.maxSpeed === "number") maxKnots = t.maxSpeed;
+        return {
+          startTime: t.startTime,
+          endTime: t.endTime,
+          startLat: t.startLat,
+          startLon: t.startLon,
+          endLat: t.endLat,
+          endLon: t.endLon,
+          distance: typeof t.distance === "number" ? t.distance : 0,
+          maxSpeed: maxKnots,
+          averageSpeed: t.averageSpeed,
+          puntos: puntos
+        };
+      });
+      if (!viajes.length && ruta.length) {
+        var kmTodo = 0;
+        for (var k = 1; k < ruta.length; k++) {
+          kmTodo += distanciaKm(ruta[k - 1].latitude, ruta[k - 1].longitude, ruta[k].latitude, ruta[k].longitude);
+        }
+        var maxKn = 0;
+        ruta.forEach(function (p) { if (p.speed && p.speed > maxKn) maxKn = p.speed; });
+        viajes = [{
+          startTime: ruta[0].fixTime,
+          endTime: ruta[ruta.length - 1].fixTime,
+          startLat: ruta[0].latitude,
+          startLon: ruta[0].longitude,
+          endLat: ruta[ruta.length - 1].latitude,
+          endLon: ruta[ruta.length - 1].longitude,
+          distance: kmTodo * 1000,
+          maxSpeed: maxKn,
+          puntos: ruta
+        }];
+      }
+      if (!viajes.length) {
+        info.textContent = "No hay viajes en ese rango de tiempo.";
+        return;
+      }
       var colores = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
+      pbDetalles = [];
       viajes.forEach(function (viaje, idx) {
         pbDetalles.push({ viaje: viaje, posiciones: viaje.puntos, color: colores[idx % colores.length] });
       });
@@ -1905,8 +1876,14 @@
       pbLineas = [];
       pbMarcadoresInicio = [];
       pbMarcadoresFin = [];
-      pbDetalles.forEach(function (item, idx) {
+      pbDetalles.forEach(function (item) {
         var puntos = item.posiciones.map(function (p) { return [p.latitude, p.longitude]; });
+        if (puntos.length < 2 && item.viaje.startLat != null) {
+          puntos = [
+            [item.viaje.startLat, item.viaje.startLon],
+            [item.viaje.endLat, item.viaje.endLon]
+          ];
+        }
         var linea = L.polyline(puntos, { color: item.color, weight: 4, opacity: 0.3 }).addTo(mapa);
         todosPuntos = todosPuntos.concat(puntos);
         if (puntos.length >= 1) {
@@ -1941,7 +1918,7 @@
           duracionMin += (new Date(v.endTime) - new Date(v.startTime)) / 60000;
         }
       });
-      info.innerHTML = "<strong>" + viajes.length + " viajes</strong> · " + (kmTotal / 1000).toFixed(1) + " km · " + Math.round(duracionMin) + " min totales";
+      info.innerHTML = "<strong>" + viajes.length + " viajes (Traccar)</strong> · " + (kmTotal / 1000).toFixed(1) + " km · " + Math.round(duracionMin) + " min totales";
       pbPosiciones = viajes;
       pbIndex = 0;
       $("#hist-controles").style.display = "";
@@ -2086,7 +2063,7 @@
     if (tipo === "eventos") {
       var ids = vehiculos.map(function (v) { return v.id; });
       var params = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
-        "&from=" + desdeIso + "&to=" + hastaIso;
+        "&from=" + encodeURIComponent(desdeIso) + "&to=" + encodeURIComponent(hastaIso);
       llamarApi("/reports/events?" + params).then(function (ev) {
         var arr = Array.isArray(ev) ? ev : [];
         arr.sort(function (a, b) {
@@ -2124,95 +2101,151 @@
       });
       return;
     }
-    Promise.all(vehiculos.map(function (v) {
-      return Promise.race([
-        llamarApi(
-          "/positions?deviceId=" + encodeURIComponent(v.id) +
-            "&from=" + encodeURIComponent(desdeIso) +
-            "&to=" + encodeURIComponent(hastaIso),
-          null,
-          { timeoutMs: 60000 }
-        ),
-        new Promise(function (_, reject) { setTimeout(function () { reject(new Error("timeout")); }, 15000); })
-      ]).then(function (pos) {
-        var arr = Array.isArray(pos) ? pos : [];
-        arr.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
-        return { id: v.id, nombre: v.nombre, conductor: conductores[v.id] || "", consumo: v.consumo || config.consumoMedio || 7, posiciones: arr };
-      }).catch(function () {
-        return { id: v.id, nombre: v.nombre, conductor: conductores[v.id] || "", consumo: v.consumo || config.consumoMedio || 7, posiciones: [] };
+    function tripATrayecto(t) {
+      var maxKmh = typeof t.maxSpeed === "number" ? Math.round(t.maxSpeed * 1.852) : 0;
+      var avgKmh = typeof t.averageSpeed === "number" ? Math.round(t.averageSpeed * 1.852) : 0;
+      var km = typeof t.distance === "number" ? t.distance / 1000 : 0;
+      var durMin = 0;
+      if (t.startTime && t.endTime) {
+        durMin = Math.round((new Date(t.endTime) - new Date(t.startTime)) / 60000);
+      }
+      return {
+        inicio: t.startTime,
+        fin: t.endTime,
+        latIni: typeof t.startLat === "number" ? t.startLat : 0,
+        lonIni: typeof t.startLon === "number" ? t.startLon : 0,
+        latFin: typeof t.endLat === "number" ? t.endLat : 0,
+        lonFin: typeof t.endLon === "number" ? t.endLon : 0,
+        km: km,
+        maxVel: maxKmh,
+        promVel: avgKmh,
+        paradas: 0,
+        durMin: durMin
+      };
+    }
+
+    function detectarParadasRuta(ruta, minMin) {
+      minMin = minMin || 5;
+      var arr = (Array.isArray(ruta) ? ruta : []).slice().sort(function (a, b) {
+        return new Date(a.fixTime) - new Date(b.fixTime);
       });
-    })).then(function (datos) {
-      var UMbralParada = 5;
-      var umbralDistancia = 0.1;
-      var umbralTiempo = 2;
-      var resultados = datos.map(function (d) {
-        var arr = d.posiciones;
-        var trayectos = [];
-        var trayectoActual = null;
+      var paradas = [];
+      var inicio = null;
+      function cerrar(fin) {
+        if (!inicio) return;
+        var durMs = new Date(fin.fixTime) - new Date(inicio.fixTime);
+        if (durMs / 60000 >= minMin) {
+          paradas.push({
+            inicio: inicio.fixTime,
+            fin: fin.fixTime,
+            durMin: Math.round(durMs / 60000),
+            latIni: inicio.latitude,
+            lonIni: inicio.longitude,
+            latFin: fin.latitude,
+            lonFin: fin.longitude,
+            km: 0,
+            maxVel: 0,
+            promVel: 0,
+            paradas: 1
+          });
+        }
+        inicio = null;
+      }
+      for (var i = 0; i < arr.length; i++) {
+        var vel = arr[i].speed ? Math.round(arr[i].speed * 1.852) : 0;
+        if (vel <= 1) {
+          if (!inicio) inicio = arr[i];
+        } else if (inicio) {
+          cerrar(arr[i]);
+        }
+      }
+      if (inicio && arr.length) cerrar(arr[arr.length - 1]);
+      return paradas;
+    }
+
+    var usaRuta = tipo === "paradas";
+    Promise.all(vehiculos.map(function (v) {
+      var carga = usaRuta
+        ? reporteRutaTraccar(v.id, desdeIso, hastaIso)
+        : reporteViajesTraccar(v.id, desdeIso, hastaIso);
+      return carga.then(function (data) {
+        var base = {
+          id: v.id,
+          nombre: v.nombre,
+          conductor: conductores[v.id] || "",
+          consumo: v.consumo || config.consumoMedio || 7,
+          kmTotal: 0,
+          maxVel: 0,
+          promVel: 0,
+          litros: 0,
+          costo: 0,
+          trayectos: [],
+          porDia: {},
+          paradas: [],
+          primera: null,
+          ultima: null
+        };
+        if (usaRuta) {
+          base.paradas = detectarParadasRuta(data, 5);
+          return base;
+        }
+        var trayectos = (Array.isArray(data) ? data : [])
+          .map(tripATrayecto)
+          .filter(function (t) {
+            return t.inicio && t.fin && !isNaN(new Date(t.inicio).getTime());
+          })
+          .sort(function (a, b) {
+            return new Date(a.inicio) - new Date(b.inicio);
+          });
         var kmTotal = 0;
         var maxVel = 0;
-        var sumVel = 0;
-        var conVel = 0;
-        for (var i = 0; i < arr.length; i++) {
-          var vel = arr[i].speed ? Math.round(arr[i].speed * 1.852) : 0;
-          if (vel > maxVel) maxVel = vel;
-          if (vel > 0) { sumVel += vel; conVel++; }
-          if (vel > 0 && !trayectoActual) {
-            trayectoActual = { inicio: arr[i].fixTime, latIni: arr[i].latitude, lonIni: arr[i].longitude, puntos: [arr[i]], km: 0, maxVel: vel, sumVel: vel, conVel: 1, paradas: 0 };
-          } else if (trayectoActual) {
-            trayectoActual.puntos.push(arr[i]);
-            if (i > 0) {
-              var dist = distanciaKm(arr[i - 1].latitude, arr[i - 1].longitude, arr[i].latitude, arr[i].longitude);
-              trayectoActual.km += dist;
-              kmTotal += dist;
-            }
-            if (vel > trayectoActual.maxVel) trayectoActual.maxVel = vel;
-            if (vel > 0) { trayectoActual.sumVel += vel; trayectoActual.conVel++; }
-            if (vel === 0) {
-              trayectoActual.paradas++;
-              var tiempoQuietos = 0;
-              for (var j = i + 1; j < arr.length; j++) {
-                var vj = arr[j].speed ? Math.round(arr[j].speed * 1.852) : 0;
-                if (vj > 0) break;
-                tiempoQuietos = (new Date(arr[j].fixTime) - new Date(arr[i].fixTime)) / 60000;
-              }
-              if (tiempoQuietos >= UMbralParada || i === arr.length - 1) {
-                trayectoActual.fin = arr[i].fixTime;
-                trayectoActual.latFin = arr[i].latitude;
-                trayectoActual.lonFin = arr[i].longitude;
-                trayectoActual.durMin = Math.round((new Date(trayectoActual.fin) - new Date(trayectoActual.inicio)) / 60000);
-                trayectoActual.promVel = trayectoActual.conVel ? Math.round(trayectoActual.sumVel / trayectoActual.conVel) : 0;
-                if (trayectoActual.km >= umbralDistancia && trayectoActual.durMin >= umbralTiempo) {
-                  trayectos.push(trayectoActual);
-                }
-                trayectoActual = null;
-              }
-            }
-          }
-        }
-        if (trayectoActual && trayectoActual.puntos.length > 1) {
-          trayectoActual.fin = arr[arr.length - 1].fixTime;
-          trayectoActual.latFin = arr[arr.length - 1].latitude;
-          trayectoActual.lonFin = arr[arr.length - 1].longitude;
-          trayectoActual.durMin = Math.round((new Date(trayectoActual.fin) - new Date(trayectoActual.inicio)) / 60000);
-          trayectoActual.promVel = trayectoActual.conVel ? Math.round(trayectoActual.sumVel / trayectoActual.conVel) : 0;
-          if (trayectoActual.km >= umbralDistancia && trayectoActual.durMin >= umbralTiempo) {
-            trayectos.push(trayectoActual);
-          }
-        }
+        var sumVelDur = 0;
+        var sumDur = 0;
         var porDia = {};
         trayectos.forEach(function (t) {
-          var dia = t.inicio.slice(0, 10);
+          kmTotal += t.km;
+          if (t.maxVel > maxVel) maxVel = t.maxVel;
+          if (t.durMin > 0) {
+            sumVelDur += t.promVel * t.durMin;
+            sumDur += t.durMin;
+          }
+          var dia = String(t.inicio).slice(0, 10);
           if (!porDia[dia]) porDia[dia] = { km: 0, trayectos: 0, durMin: 0, maxVel: 0, paradas: 0 };
           porDia[dia].km += t.km;
           porDia[dia].trayectos++;
           porDia[dia].durMin += t.durMin;
-          porDia[dia].paradas += t.paradas;
           if (t.maxVel > porDia[dia].maxVel) porDia[dia].maxVel = t.maxVel;
         });
-        var litros = kmTotal * (d.consumo / 100);
-        return { id: d.id, nombre: d.nombre, conductor: d.conductor, kmTotal: kmTotal, maxVel: maxVel, promVel: conVel ? Math.round(sumVel / conVel) : 0, litros: litros, costo: litros * (config.precioCombustible || 0), trayectos: trayectos, porDia: porDia, primera: arr.length ? arr[0].fixTime : null, ultima: arr.length ? arr[arr.length - 1].fixTime : null };
+        var litros = kmTotal * (base.consumo / 100);
+        base.kmTotal = kmTotal;
+        base.maxVel = maxVel;
+        base.promVel = sumDur ? Math.round(sumVelDur / sumDur) : 0;
+        base.litros = litros;
+        base.costo = litros * (config.precioCombustible || 0);
+        base.trayectos = trayectos;
+        base.porDia = porDia;
+        base.primera = trayectos.length ? trayectos[0].inicio : null;
+        base.ultima = trayectos.length ? trayectos[trayectos.length - 1].fin : null;
+        return base;
+      }).catch(function () {
+        return {
+          id: v.id,
+          nombre: v.nombre,
+          conductor: conductores[v.id] || "",
+          consumo: v.consumo || config.consumoMedio || 7,
+          kmTotal: 0,
+          maxVel: 0,
+          promVel: 0,
+          litros: 0,
+          costo: 0,
+          trayectos: [],
+          porDia: {},
+          paradas: [],
+          primera: null,
+          ultima: null
+        };
       });
+    })).then(function (resultados) {
       var html = "";
       if (tipo === "resumen" || tipo === "vehiculo") {
         html += '<h3 style="margin:0.5rem 0;font-size:1rem;">Resumen total del rango</h3>';
@@ -2237,10 +2270,10 @@
             if (dd.maxVel > diasTotales[dia].maxVel) diasTotales[dia].maxVel = dd.maxVel;
           });
         });
-        html += '<table class="table-report"><thead><tr><th>Día</th><th>Distancia (km)</th><th>Trayectos</th><th>Tiempo (min)</th><th>Vel. máx</th><th>Paradas</th></tr></thead><tbody>';
+        html += '<table class="table-report"><thead><tr><th>Día</th><th>Distancia (km)</th><th>Trayectos</th><th>Tiempo (min)</th><th>Vel. máx</th></tr></thead><tbody>';
         Object.keys(diasTotales).sort().forEach(function (dia) {
           var dd = diasTotales[dia];
-          html += '<tr><td>' + dia + '</td><td>' + dd.km.toFixed(1) + '</td><td>' + dd.trayectos + '</td><td>' + dd.durMin + '</td><td>' + dd.maxVel + ' km/h</td><td>' + dd.paradas + '</td></tr>';
+          html += '<tr><td>' + dia + '</td><td>' + dd.km.toFixed(1) + '</td><td>' + dd.trayectos + '</td><td>' + dd.durMin + '</td><td>' + dd.maxVel + ' km/h</td></tr>';
         });
         html += '</tbody></table>';
       }
@@ -2249,9 +2282,9 @@
         resultados.forEach(function (r) {
           if (!r.trayectos.length) return;
           html += '<p style="margin:0.5rem 0 0.25rem;font-weight:600;">' + esc(r.nombre) + ' (' + esc(r.conductor) + ')</p>';
-          html += '<table class="table-report"><thead><tr><th>#</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Distancia</th><th>Vel. máx</th><th>Vel. prom</th><th>Paradas</th></tr></thead><tbody>';
+          html += '<table class="table-report"><thead><tr><th>#</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Distancia</th><th>Vel. máx</th><th>Vel. prom</th></tr></thead><tbody>';
           r.trayectos.forEach(function (t, idx) {
-            html += '<tr><td>' + (idx + 1) + '</td><td>' + fechaHoraLocal(t.inicio) + '</td><td>' + fechaHoraLocal(t.fin) + '</td><td>' + t.durMin + ' min</td><td>' + t.km.toFixed(1) + ' km</td><td>' + t.maxVel + ' km/h</td><td>' + t.promVel + ' km/h</td><td>' + t.paradas + '</td></tr>';
+            html += '<tr><td>' + (idx + 1) + '</td><td>' + fechaHoraLocal(t.inicio) + '</td><td>' + fechaHoraLocal(t.fin) + '</td><td>' + t.durMin + ' min</td><td>' + t.km.toFixed(1) + ' km</td><td>' + t.maxVel + ' km/h</td><td>' + t.promVel + ' km/h</td></tr>';
           });
           html += '</tbody></table>';
         });
@@ -2268,15 +2301,13 @@
         html += '<table class="table-report"><thead><tr><th>Vehículo</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Lat</th><th>Lon</th></tr></thead><tbody>';
         var conParadas = false;
         resultados.forEach(function (r) {
-          r.trayectos.forEach(function (t) {
-            if (t.paradas > 0) {
-              conParadas = true;
-              html += '<tr><td>' + esc(r.nombre) + '</td><td>' + horaLocal(t.inicio) + '</td><td>' + horaLocal(t.fin) + '</td><td>' + t.durMin + ' min</td><td>' + t.latIni.toFixed(5) + '</td><td>' + t.lonIni.toFixed(5) + '</td></tr>';
-            }
+          (r.paradas || []).forEach(function (t) {
+            conParadas = true;
+            html += '<tr><td>' + esc(r.nombre) + '</td><td>' + fechaHoraLocal(t.inicio) + '</td><td>' + fechaHoraLocal(t.fin) + '</td><td>' + t.durMin + ' min</td><td>' + t.latIni.toFixed(5) + '</td><td>' + t.lonIni.toFixed(5) + '</td></tr>';
           });
         });
         html += '</tbody></table>';
-        if (!conParadas) html += '<p class="note">No se detectaron paradas significativas.</p>';
+        if (!conParadas) html += '<p class="note">No se detectaron paradas de 5 minutos o más.</p>';
       }
       resultado.innerHTML = html || '<p class="note">No hay datos para mostrar.</p>';
     });
