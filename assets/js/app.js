@@ -9,6 +9,7 @@
   var CLAVE_POIS = "flota_pois";
   var CLAVE_HOSPITALES_EDITADOS = "flota_hospitales_editados";
   var CLAVE_MAPA_OSCURO = "flota_mapa_oscuro";
+  var CLAVE_SESION = "flota_sesion_v1";
 
   var CONFIG_POR_DEFECTO = {
     baseUrl: "http://localhost:3000",
@@ -634,6 +635,144 @@
       return { Authorization: "Bearer " + c.token.trim() };
     }
     return { Authorization: "Basic " + btoa(c.user + ":" + c.password) };
+  }
+
+  function cargarSesion() {
+    try {
+      var s = localStorage.getItem(CLAVE_SESION);
+      return s ? JSON.parse(s) : null;
+    } catch (e) { return null; }
+  }
+
+  function guardarSesion(datos) {
+    try {
+      localStorage.setItem(CLAVE_SESION, JSON.stringify(datos));
+    } catch (e) {}
+  }
+
+  function cerrarSesionLocal() {
+    try { localStorage.removeItem(CLAVE_SESION); } catch (e) {}
+  }
+
+  function haySesion() {
+    var s = cargarSesion();
+    return !!(s && s.email && config.user);
+  }
+
+  function mostrarLogin(errorMsg) {
+    document.body.classList.remove("sesion-activa");
+    $("#app-shell").hidden = true;
+    $("#login-screen").hidden = false;
+    var err = $("#login-error");
+    if (errorMsg) {
+      err.hidden = false;
+      $("#login-error-texto").textContent = errorMsg;
+    } else {
+      err.hidden = true;
+      $("#login-error-texto").textContent = "";
+    }
+    var em = $("#login-email");
+    if (em && !em.value && config.user) em.value = config.user;
+    var lu = $("#login-url");
+    if (lu && !lu.value && config.baseUrl) lu.value = config.baseUrl;
+    if (em) em.focus();
+  }
+
+  function ocultarLogin() {
+    document.body.classList.add("sesion-activa");
+    $("#login-screen").hidden = true;
+    $("#app-shell").hidden = false;
+  }
+
+  function intentarLogin(email, password, baseUrl) {
+    var base = (baseUrl || config.baseUrl || "http://localhost:3000").trim().replace(/\/+$/, "");
+    var cfgLogin = {
+      baseUrl: base,
+      authType: "basic",
+      user: email,
+      password: password,
+      token: ""
+    };
+    return fetch(base + "/api/session", {
+      method: "POST",
+      headers: {
+        "Authorization": "Basic " + btoa(email + ":" + password),
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: "email=" + encodeURIComponent(email) + "&password=" + encodeURIComponent(password)
+    }).then(function (r) {
+      if (r.status === 401 || r.status === 403) {
+        throw new Error("Correo o contraseña incorrectos.");
+      }
+      if (r.status === 404) {
+        throw new Error("No se encontró /api/session. Revisa la URL del servidor.");
+      }
+      if (r.status === 502) {
+        throw new Error("El proxy no alcanzó a Traccar. ¿Está corriendo?");
+      }
+      if (!r.ok) {
+        throw new Error("Traccar respondió con estado " + r.status + ".");
+      }
+      return r.json().catch(function () { return {}; });
+    }).then(function (usuario) {
+      config = Object.assign({}, config, {
+        baseUrl: base,
+        authType: "basic",
+        user: email,
+        password: password,
+        token: ""
+      });
+      guardarConfig(config);
+      guardarSesion({
+        email: email,
+        nombre: usuario && (usuario.name || usuario.email) || email,
+        admin: !!(usuario && usuario.admin),
+        ts: Date.now()
+      });
+      return usuario;
+    });
+  }
+
+  function iniciales(nombre) {
+    if (!nombre) return "OP";
+    var partes = String(nombre).trim().split(/\s+/);
+    var a = (partes[0] || "").charAt(0);
+    var b = (partes[1] || "").charAt(0);
+    return (a + b).toUpperCase() || a.toUpperCase() || "OP";
+  }
+
+  function aplicarSesionUI() {
+    var s = cargarSesion();
+    var nombre = (s && s.nombre) || config.user || "Operador de flota";
+    $("#usuario-actual").textContent = nombre;
+    $("#usuario-meta").textContent = s && s.admin ? "Administrador" : "Operador";
+    var av = document.querySelector(".avatar");
+    if (av) av.textContent = iniciales(nombre);
+  }
+
+  function salir() {
+    var s = cargarSesion();
+    detenerAutoRefresco();
+    if (s && config.baseUrl) {
+      fetch(config.baseUrl + "/api/session", {
+        method: "DELETE",
+        headers: obtenerCabeceras(config)
+      }).catch(function () {});
+    }
+    config = Object.assign({}, config, { user: "", password: "", token: "", authType: "basic" });
+    guardarConfig(config);
+    cerrarSesionLocal();
+    vehiculos = [];
+    mostrarLogin();
+    estadoConexion("wait", "Sesión cerrada");
+  }
+
+  function iniciarSesionApp() {
+    ocultarLogin();
+    aplicarSesionUI();
+    alertaInicial.hidden = true;
+    $("#btn-refrescar").disabled = false;
+    iniciarConexion();
   }
 
   function llamarApi(ruta, cfg, opciones) {
@@ -1984,7 +2123,12 @@
         return;
       }
       if (pbIndex >= pbDetalles.length - 1) { pbIndex = 0; }
-      document.getElementById("seccion-mapa").scrollIntoView({ behavior: "smooth" });
+      var wrapMapa = document.querySelector(".map-wrap");
+      var contScroll = document.querySelector(".page");
+      if (wrapMapa && contScroll) {
+        var y = wrapMapa.getBoundingClientRect().top - contScroll.getBoundingClientRect().top + contScroll.scrollTop;
+        contScroll.scrollTo({ top: Math.max(0, y - 60), behavior: "smooth" });
+      }
       $("#pb-play").innerHTML = '<svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg>';
       $("#pb-play").setAttribute("aria-label", "Pausar ruta");
       var vel = parseInt($("#pb-velocidad").value, 10) || 3;
@@ -2498,6 +2642,7 @@
       return;
     }
     lista.innerHTML = visibles.map(tarjeta).join("");
+    rellenarSelectoresConductores();
   }
 
   function tarjeta(v) {
@@ -2515,7 +2660,6 @@
     var sosBadge = v.sos ? '<span class="badge badge--danger badge--sos">SOS ACTIVO</span>' : "";
     var estadoBadge = v.estado.tipo === "offline" ? "" : '<span class="badge badge--' + clasesBadge[v.estado.tipo] + ' badge--estado">' + v.estado.etiqueta + '</span>';
     var conductor = conductores[v.id] || "";
-    var conductorHtml = conductor ? '<span class="badge badge--info">' + esc(conductor) + '</span>' : "";
     var velocidadBadge = "";
     var limite = parseFloat(config.limiteVelocidad) || 80;
     if (v.velocidad > limite) {
@@ -2545,7 +2689,9 @@
       refsHtml +
       '<div class="vehicle__compact-stats">' +
         '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
-        '<div><span class="vehicle__stat-label">Conductor</span><span class="vehicle__stat-value">' + esc(conductor || "Sin asignar") + '</span></div>' +
+        '<div><span class="vehicle__stat-label">Conductor</span>' +
+          '<select class="conductor-select" data-conductor="' + v.id + '" aria-label="Conductor del vehículo"></select>' +
+        '</div>' +
       '</div>' +
       '<div class="vehicle__actions"><button class="button button--outlined" type="button" data-abrir-modal-vehiculo="' + v.id + '"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> Ver detalles</button>' + (v.tienePosicion ? mapLink : '') + '</div>' +
     '</article>';
@@ -2856,13 +3002,14 @@
         '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Vel. máx / prom</span><span class="vehicle__stat-value">' + stats.max + ' / ' + stats.promedio + ' km/h</span></div>' +
       '</div>' +
       '<dl class="vehicle__meta" style="margin-top:1rem;">' +
-        '<div><dt>Conductor</dt><dd>' + esc(conductor || "Sin asignar") + '</dd></div>' +
+        '<div><dt>Conductor</dt><dd><select class="conductor-select" data-conductor="' + v.id + '" aria-label="Conductor del vehículo"></select></dd></div>' +
         '<div><dt>Tiempo quieto</dt><dd>' + tiempoQuietoStr + '</dd></div>' +
         '<div><dt>Coordenadas</dt><dd>' + coords + '</dd></div>' +
         '<div><dt>Dirección</dt><dd>' + esc(direccion) + '</dd></div>' +
         '<div><dt>Última señal</dt><dd>' + hora + '</dd></div>' +
       '</dl>' +
       refsHtml;
+    rellenarSelectoresConductores();
     modalV.hidden = false;
   }
 
@@ -2923,7 +3070,11 @@
     $("#btn-refrescar").disabled = false;
     alertaInicial.hidden = true;
     cerrarModal();
-    iniciarConexion();
+    if (haySesion()) {
+      iniciarConexion();
+    } else {
+      mostrarLogin();
+    }
   }
 
   function probarConexion() {
@@ -3080,6 +3231,16 @@
     lista.addEventListener("change", function (e) {
       var c = e.target.closest("[data-conductor]");
       if (!c) return;
+      asignarConductor(c);
+    });
+
+    $("#modal-vehiculo-body").addEventListener("change", function (e) {
+      var c = e.target.closest("[data-conductor]");
+      if (!c) return;
+      asignarConductor(c);
+    });
+
+    function asignarConductor(c) {
       var id = parseInt(c.getAttribute("data-conductor"), 10);
       var nombre = c.value;
       if (nombre) {
@@ -3091,7 +3252,7 @@
       }
       guardarConductores();
       refrescar();
-    });
+    }
 
     $("#btn-refrescar").addEventListener("click", function () {
       refrescar();
@@ -3133,6 +3294,41 @@
     $("#cfg-metodo").addEventListener("change", actualizarCamposAuth);
     formConfig.addEventListener("submit", guardarConfiguracion);
     $("#btn-probar").addEventListener("click", probarConexion);
+
+    $("#form-login").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var email = $("#login-email").value.trim();
+      var pass = $("#login-pass").value;
+      var url = $("#login-url").value.trim();
+      var btn = $("#btn-login");
+      if (!email || !pass) {
+        $("#login-error").hidden = false;
+        $("#login-error-texto").textContent = "Escribe correo y contraseña.";
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Verificando…";
+      $("#login-error").hidden = true;
+      intentarLogin(email, pass, url)
+        .then(function () {
+          btn.disabled = false;
+          btn.textContent = "Entrar a FLOTA";
+          $("#login-pass").value = "";
+          iniciarSesionApp();
+          mostrarToast("Sesión iniciada.", "success");
+        })
+        .catch(function (err) {
+          btn.disabled = false;
+          btn.textContent = "Entrar a FLOTA";
+          $("#login-error").hidden = false;
+          $("#login-error-texto").textContent = err && err.message ? err.message : "Error desconocido.";
+        });
+    });
+
+    $("#btn-logout").addEventListener("click", function () {
+      if (!confirm("¿Cerrar sesión?")) return;
+      salir();
+    });
 
     $("#btn-nueva-geozona").addEventListener("click", abrirModalGeozona);
     $("#gz-cerrar").addEventListener("click", function () { cancelarDibujoGeozona(); cerrarModalGeozona(); });
@@ -3303,7 +3499,7 @@
         var id = parseInt(btn.getAttribute("data-ver-hospital"), 10);
         for (var i = 0; i < hospitales.length; i++) {
           if (hospitales[i].id === id && mapa) {
-            document.getElementById("seccion-mapa").scrollIntoView({ behavior: "smooth" });
+      document.querySelector(".map-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
             mapa.setView([hospitales[i].lat, hospitales[i].lon], 14);
             break;
           }
@@ -3357,6 +3553,19 @@
     }
 
     $("#btn-exportar-gpx").addEventListener("click", exportarGPX);
+
+    $("#btn-cerrar-rutas").addEventListener("click", function () {
+      limpiarHistorial();
+      pbPosiciones = [];
+      pbDetalles = [];
+      pbIndex = 0;
+      $("#hist-controles").style.display = "none";
+      $("#pb-info").textContent = "";
+      $("#pb-fecha").textContent = "";
+      var info = $("#hist-info");
+      if (info) info.textContent = "";
+      mostrarToast("Rutas limpiadas del mapa.", "success");
+    });
 
     $("#hist-rango").addEventListener("change", function () {
       var rango = this.value;
@@ -3415,16 +3624,11 @@
       }
     });
 
-    if (config.baseUrl && (config.user || config.password || config.token)) {
-      iniciarConexion();
+    if (haySesion()) {
+      iniciarSesionApp();
     } else {
-      setAlerta(
-        "warning",
-        "Sin conexión configurada",
-        "Configura tu servidor Traccar (o el proxy) y tus credenciales en el botón Configuración para empezar a monitorear tus dispositivos.",
-        "Configurar ahora",
-        abrirModal
-      );
+      mostrarLogin();
+      estadoConexion("wait", "Iniciando sesión…");
     }
   }
 

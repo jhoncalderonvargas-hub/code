@@ -31,9 +31,44 @@
     <symbol id="i-minus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></symbol>
     <symbol id="i-circle-dot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
   </svg>
   <a class="skip-link" href="#contenido">Saltar al contenido</a>
-  <div class="app-shell">
+
+  <div class="login-screen" id="login-screen" role="dialog" aria-modal="true" aria-labelledby="login-titulo">
+    <form class="login-card" id="form-login" autocomplete="on">
+      <div class="login-card__brand">
+        <img src="icono-flota.svg" alt="" width="56" height="56">
+        <div>
+          <strong class="login-card__name">FLOTA</strong>
+          <span class="login-card__sub">Gestor de flota · GPS Traccar</span>
+        </div>
+      </div>
+      <h1 id="login-titulo">Iniciar sesión</h1>
+      <p class="note">Usa el correo y la contraseña de tu cuenta Traccar.</p>
+      <div class="stack">
+        <div class="field">
+          <label for="login-email">Correo electrónico</label>
+          <input id="login-email" name="email" type="email" required autocomplete="username" placeholder="admin@dominio.com">
+        </div>
+        <div class="field">
+          <label for="login-pass">Contraseña</label>
+          <input id="login-pass" name="password" type="password" required autocomplete="current-password" placeholder="••••••••">
+        </div>
+        <div class="field">
+          <label for="login-url">URL del servidor <span class="note">(opcional)</span></label>
+          <input id="login-url" name="baseUrl" type="url" placeholder="http://localhost:3000">
+          <p class="field__help">Vacío = proxy local <code>http://localhost:3000</code>.</p>
+        </div>
+        <div id="login-error" class="alert alert--error" hidden>
+          <div><strong id="login-error-titulo">No se pudo iniciar sesión</strong><p class="note" id="login-error-texto"></p></div>
+        </div>
+        <button class="button button--filled" id="btn-login" type="submit">Entrar a FLOTA</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="app-shell" id="app-shell" hidden>
     <header class="topbar">
       <a class="brand" href="index.html" aria-label="Ir al panel del gestor de flota">
         <svg class="brand__icon" width="46" height="46" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
@@ -72,7 +107,8 @@
       <div class="user-summary" aria-label="Usuario actual">
         <button class="button button--icon" id="btn-modo-oscuro" type="button" title="Modo oscuro" aria-label="Cambiar modo oscuro"><svg class="icon" aria-hidden="true"><use href="#i-moon"/></svg></button>
         <span class="avatar" aria-hidden="true">OP</span>
-        <span><strong>Operador de flota</strong><span class="user-summary__meta">Administrador</span></span>
+        <span><strong id="usuario-actual">Operador de flota</strong><span class="user-summary__meta" id="usuario-meta">Administrador</span></span>
+        <button class="button button--outlined" id="btn-logout" type="button" title="Cerrar sesión" aria-label="Cerrar sesión">Salir</button>
       </div>
       <div class="topbar__flash topbar__flash--1"></div>
       <div class="topbar__flash topbar__flash--2"></div>
@@ -151,22 +187,22 @@
             <div class="layer-control" id="layer-control">
               <div class="layer-control__title">Capas</div>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-vehiculos" checked> <svg class="icon" aria-hidden="true"><use href="#i-car"/></svg> Vehículos
+                <input type="checkbox" id="layer-vehiculos" checked> 🚗 Vehículos
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-geozonas" checked> <svg class="icon" aria-hidden="true"><use href="#i-circle-dot"/></svg> Geozonas
+                <input type="checkbox" id="layer-geozonas" checked> ◎ Geozonas
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-pois" checked> <svg class="icon" aria-hidden="true"><use href="#i-pin"/></svg> POIs
+                <input type="checkbox" id="layer-pois" checked> 📍 POIs
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-hospitales"> <svg class="icon" aria-hidden="true"><use href="#i-hospital"/></svg> Hospitales
+                <input type="checkbox" id="layer-hospitales"> 🏥 Hospitales
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-cobertura"> <svg class="icon" aria-hidden="true"><use href="#i-circle"/></svg> Cobertura
+                <input type="checkbox" id="layer-cobertura"> ⭕ Cobertura
               </label>
               <label class="layer-control__item">
-                <input type="checkbox" id="layer-ruta" checked> <svg class="icon" aria-hidden="true"><use href="#i-route"/></svg> Historial
+                <input type="checkbox" id="layer-ruta" checked> 🛤️ Historial
               </label>
             </div>
             <div class="map-dark-toggle" id="map-dark-toggle">
@@ -178,7 +214,7 @@
             </div>
           </div>
           <div id="hist-controles" style="display:none; margin-top: 0.75rem;">
-            <div class="card" style="padding: 0.75rem;">
+            <div class="card" style="padding: 0.75rem; position: relative;">
               <div class="playback-bar">
                 <span id="pb-fecha" style="min-width:160px;"></span>
                 <input type="range" id="pb-slider" min="0" max="100" value="0" style="flex:1;">
@@ -197,7 +233,12 @@
                   </select>
                 </div>
               </div>
-              <div id="pb-info" class="note" style="margin-top: 0.5rem;"></div>
+              <div class="playback-meta">
+                <div id="pb-info" class="note"></div>
+                <button class="map-clear-routes__btn" id="btn-cerrar-rutas" type="button" title="Limpiar rutas del mapa" aria-label="Limpiar rutas del mapa">
+                  <svg class="icon" aria-hidden="true"><use href="#i-x"/></svg>
+                </button>
+              </div>
             </div>
           </div>
         </section>

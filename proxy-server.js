@@ -67,9 +67,14 @@ async function proxyApi(req, res, pathname, busqueda) {
       body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.from(cuerpo)
     });
     const datos = await upstream.arrayBuffer();
-    res.writeHead(upstream.status, {
+    const cabecerasSalida = {
       "Content-Type": upstream.headers.get("content-type") || "application/json; charset=utf-8"
-    });
+    };
+    const cookies = typeof upstream.headers.getSetCookie === "function"
+      ? upstream.headers.getSetCookie()
+      : (upstream.headers.get("set-cookie") ? [upstream.headers.get("set-cookie")] : []);
+    if (cookies.length) cabecerasSalida["Set-Cookie"] = cookies;
+    res.writeHead(upstream.status, cabecerasSalida);
     res.end(Buffer.from(datos));
   } catch (err) {
     res.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });

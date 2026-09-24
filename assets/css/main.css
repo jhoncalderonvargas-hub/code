@@ -482,6 +482,17 @@ a {
   border-color: var(--primary-dark);
 }
 
+.button--icon.button--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.button--icon.button--danger:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
 .button--play {
   font-size: var(--fs-md);
   padding: var(--sp-2) var(--sp-3);
@@ -1209,6 +1220,52 @@ a {
   z-index: 1000;
 }
 
+.playback-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  margin-top: 0.5rem;
+  min-height: 2rem;
+}
+
+.playback-meta .note {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+
+.map-clear-routes__btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--danger);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transition: transform var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.map-clear-routes__btn .icon {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.map-clear-routes__btn:hover {
+  background: #b91c1c;
+  transform: scale(1.08);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.65);
+}
+
+.map-clear-routes__btn:active {
+  transform: scale(0.96);
+}
+
 .map-dark-toggle__label {
   display: flex;
   align-items: center;
@@ -1238,11 +1295,40 @@ a {
 .map-dark-toggle__icon {
   display: inline-flex;
   align-items: center;
-  transition: transform 0.3s ease;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%);
+  color: #1e293b;
+  box-shadow:
+    0 0 0 2px rgba(251, 191, 36, 0.35),
+    0 0 10px rgba(245, 158, 11, 0.55);
+  transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.3s ease;
+}
+
+.map-dark-toggle__icon .icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.map-dark-toggle__label:hover .map-dark-toggle__icon {
+  transform: scale(1.08) rotate(-12deg);
+  box-shadow:
+    0 0 0 2px rgba(251, 191, 36, 0.55),
+    0 0 14px rgba(245, 158, 11, 0.75);
+}
+
+.map-dark-toggle__label input:checked ~ .map-dark-toggle__icon {
+  background: linear-gradient(135deg, #818cf8 0%, #6366f1 50%, #4f46e5 100%);
+  color: #f8fafc;
+  box-shadow:
+    0 0 0 2px rgba(129, 140, 248, 0.4),
+    0 0 12px rgba(99, 102, 241, 0.65);
 }
 
 .map-dark-toggle__label input:checked ~ .map-dark-toggle__text {
-  color: var(--primary);
+  color: #a5b4fc;
 }
 
 .field {
@@ -1630,6 +1716,85 @@ a {
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
+}
+
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-5);
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(37, 99, 235, 0.18), transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(37, 99, 235, 0.12), transparent 45%),
+    var(--bg, #0f172a);
+}
+
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  animation: modalIn 0.25s ease;
+}
+
+.login-card__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.login-card__brand img {
+  border-radius: var(--radius-sm);
+}
+
+.login-card__name {
+  display: block;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.login-card__sub {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: var(--fs-xl);
+}
+
+.login-card .note {
+  margin: 0;
+}
+
+.login-card .stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.login-card .button {
+  width: 100%;
+  margin-top: var(--sp-1);
+}
+
+.login-card .alert {
+  margin-bottom: 0;
+}
+
+body.sesion-activa .login-screen {
+  display: none;
 }
 
 .hospital-summary__value {
