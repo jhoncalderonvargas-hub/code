@@ -7,7 +7,6 @@
   var CLAVE_VELOCIDADES = "flota_velocidades_v1";
   var CLAVE_MODO_OSCURO = "flota_modo_oscuro";
   var CLAVE_POIS = "flota_pois";
-  var CLAVE_HOSPITALES_EDITADOS = "flota_hospitales_editados";
   var CLAVE_MAPA_OSCURO = "flota_mapa_oscuro";
   var CLAVE_SESION = "flota_sesion_v1";
 
@@ -31,237 +30,6 @@
   var pois = cargarPois();
   var hospitales = [
     {
-      id: 1,
-      nombre: "Hospital San Vicente Fundación",
-      tipo: "Hospital Privado",
-      direccion: "Calle 64 #51D-154, Medellín",
-      telefono: "(604) 444-1333",
-      camas: 650,
-      lat: 6.2445,
-      lon: -75.5685,
-      especialidades: ["Urgencias", "Alta complejidad", "Trasplantes", "Oncología", "Neurocirugía", "Quemados"]
-    },
-    {
-      id: 2,
-      nombre: "Hospital General de Medellín",
-      tipo: "Hospital Público",
-      direccion: "Carrera 48 #32-102, Medellín",
-      telefono: "(604) 384-7300",
-      camas: 520,
-      lat: 6.2490,
-      lon: -75.5740,
-      especialidades: ["Urgencias", "Cirugía", "Medicina Interna", "Pediatría", "Ginecología"]
-    },
-    {
-      id: 3,
-      nombre: "Hospital Pablo Tobón Uribe",
-      tipo: "Hospital Privado",
-      direccion: "Carrera 51D #60-100, Medellín",
-      telefono: "(604) 444-0555",
-      camas: 450,
-      lat: 6.2350,
-      lon: -75.5580,
-      especialidades: ["Urgencias", "Cardiovascular", "Neurología", "Oncología", "Ortopedia"]
-    },
-    {
-      id: 4,
-      nombre: "Hospital Universitario San Jorge",
-      tipo: "Hospital Público",
-      direccion: "Calle 64 #5-85, Medellín",
-      telefono: "(604) 444-4444",
-      camas: 380,
-      lat: 6.2620,
-      lon: -75.5650,
-      especialidades: ["Urgencias", "Traumatología", "Medicina Interna", "Cirugía"]
-    },
-    {
-      id: 5,
-      nombre: "Hospital Alma Máter de Antioquia",
-      tipo: "Hospital Público",
-      direccion: "Calle 69 #51C-24, Medellín",
-      telefono: "(604) 604-9595",
-      camas: 300,
-      lat: 6.2420,
-      lon: -75.5620,
-      especialidades: ["Urgencias", "Pediatría", "Ginecología", "Cirugía General"]
-    },
-    {
-      id: 6,
-      nombre: "Clínica Cardio VID",
-      tipo: "Clínica Privada",
-      direccion: "Carrera 43 #1-50, Medellín",
-      telefono: "(604) 444-0555",
-      camas: 120,
-      lat: 6.2090,
-      lon: -75.5750,
-      especialidades: ["Cardiología", "Cirugía Cardiovascular", "Hemodinámica", "Rehabilitación Cardíaca"]
-    },
-    {
-      id: 7,
-      nombre: "Hospital de la Mujer",
-      tipo: "Hospital Público",
-      direccion: "Carrera 42 #5-50, Medellín",
-      telefono: "(604) 444-3333",
-      camas: 200,
-      lat: 6.2250,
-      lon: -75.5680,
-      especialidades: ["Ginecología", "Obstetricia", "Neonatología", "Planificación Familiar"]
-    },
-    {
-      id: 8,
-      nombre: "Centro Médico Imbanaco",
-      tipo: "Centro Médico",
-      direccion: "Carrera 38A #5-100, Medellín",
-      telefono: "(604) 444-5555",
-      camas: 280,
-      lat: 6.2180,
-      lon: -75.5820,
-      especialidades: ["Urgencias", "Cirugía Plástica", "Rehabilitación", "Medicina Deportiva"]
-    },
-    {
-      id: 9,
-      nombre: "Hospital Infantil San Juan de Dios",
-      tipo: "Hospital Público",
-      direccion: "Carrera 50 #58-18, Medellín",
-      telefono: "(604) 444-8800",
-      camas: 180,
-      lat: 6.2380,
-      lon: -75.5540,
-      especialidades: ["Pediatría", "Neonatología", "Cirugía Pediátrica", "Urgencias Pediátricas"]
-    },
-    {
-      id: 10,
-      nombre: "Clínica El Rosario",
-      tipo: "Clínica Privada",
-      direccion: "Carrera 43A #1-50, Medellín",
-      telefono: "(604) 444-0555",
-      camas: 150,
-      lat: 6.2050,
-      lon: -75.5710,
-      especialidades: ["Cardiología", "Oftalmología", "Odontología", "Cirugía General"]
-    },
-    {
-      id: 11,
-      nombre: "Hospital San Juan de Dios (Bello)",
-      tipo: "Hospital Público",
-      direccion: "Carrera 49 #61-81, Bello",
-      telefono: "(604) 605-4949",
-      camas: 120,
-      lat: 6.3350,
-      lon: -75.5530,
-      especialidades: ["Urgencias", "Medicina Interna", "Pediatría", "Ginecología"]
-    },
-    {
-      id: 12,
-      nombre: "Hospital San Fernando (Amagá)",
-      tipo: "Hospital Público",
-      direccion: "Carrera 51 #52-81, Amagá",
-      telefono: "(604) 847-2121",
-      camas: 80,
-      lat: 6.0380,
-      lon: -75.7030,
-      especialidades: ["Urgencias", "Medicina General", "Cirugía General"]
-    },
-    {
-      id: 13,
-      nombre: "Hospital San Juan de Dios (Rionegro)",
-      tipo: "Hospital Público",
-      direccion: "Carrera 51 #56-20, Rionegro",
-      telefono: "(604) 605-4949",
-      camas: 100,
-      lat: 6.1530,
-      lon: -75.3750,
-      especialidades: ["Urgencias", "Medicina Interna", "Pediatría", "Cirugía"]
-    },
-    {
-      id: 14,
-      nombre: "Hospital Mental de Antioquia",
-      tipo: "Hospital Público",
-      direccion: "Calle 31 #32-14, Medellín",
-      telefono: "(604) 320-1212",
-      camas: 200,
-      lat: 6.2680,
-      lon: -75.5610,
-      especialidades: ["Psiquiatría", "Salud Mental", "Adicciones", "Neurología"]
-    },
-    {
-      id: 15,
-      nombre: "Hospital San Rafael (Santa Fe de Antioquia)",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Santa Fe de Antioquia",
-      telefono: "(604) 836-1212",
-      camas: 50,
-      lat: 6.5560,
-      lon: -75.8260,
-      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
-    },
-    {
-      id: 16,
-      nombre: "Hospital San Juan de Dios (Yarumal)",
-      tipo: "Hospital Público",
-      direccion: "Carrera 23 #12-13, Yarumal",
-      telefono: "(604) 853-7373",
-      camas: 80,
-      lat: 6.9633,
-      lon: -75.4172,
-      especialidades: ["Urgencias", "Medicina General", "Especializada", "Laboratorio", "Hospitalización"]
-    },
-    {
-      id: 17,
-      nombre: "Hospital Santa Rosa de Osos",
-      tipo: "Hospital Público",
-      direccion: "Calle 44 #49B-90, Santa Rosa de Osos",
-      telefono: "(604) 855-2029",
-      camas: 60,
-      lat: 6.8400,
-      lon: -75.4600,
-      especialidades: ["Urgencias", "Medicina General", "Pediatría", "Ginecología"]
-    },
-    {
-      id: 18,
-      nombre: "Hospital San Roque",
-      tipo: "Hospital Público",
-      direccion: "Calle 10 #10-51, San Roque",
-      telefono: "(604) 855-5896",
-      camas: 50,
-      lat: 6.9833,
-      lon: -75.5167,
-      especialidades: ["Urgencias", "Medicina General", "Odontología", "Laboratorio"]
-    },
-    {
-      id: 19,
-      nombre: "Hospital Donmatías",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Donmatías",
-      telefono: "(604) 855-1212",
-      camas: 60,
-      lat: 6.4867,
-      lon: -75.3917,
-      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
-    },
-    {
-      id: 20,
-      nombre: "Hospital Carolina del Príncipe",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Carolina del Príncipe",
-      telefono: "(604) 855-1313",
-      camas: 40,
-      lat: 6.7500,
-      lon: -75.2833,
-      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
-    },
-    {
-      id: 21,
-      nombre: "Hospital Gómez Plata",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Gómez Plata",
-      telefono: "(604) 855-1414",
-      camas: 45,
-      lat: 6.6833,
-      lon: -75.2167,
-      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
-    },
-    {
       id: 22,
       nombre: "Hospital Yolombó",
       tipo: "Hospital Público",
@@ -270,116 +38,6 @@
       camas: 35,
       lat: 6.59010,
       lon: -75.01718,
-      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
-    },
-    {
-      id: 23,
-      nombre: "Hospital Santo Domingo",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Santo Domingo",
-      telefono: "(604) 855-1616",
-      camas: 40,
-      lat: 6.4667,
-      lon: -75.1667,
-      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
-    },
-    {
-      id: 24,
-      nombre: "Hospital Campamento",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Campamento",
-      telefono: "(604) 855-1717",
-      camas: 30,
-      lat: 6.9833,
-      lon: -75.3000,
-      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
-    },
-    {
-      id: 25,
-      nombre: "Hospital Angostura",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Angostura",
-      telefono: "(604) 855-1818",
-      camas: 35,
-      lat: 6.8833,
-      lon: -75.3333,
-      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
-    },
-    {
-      id: 26,
-      nombre: "Hospital San Camilo de Vegachí",
-      tipo: "Hospital Público",
-      direccion: "Carrera 49a #50a-14, Vegachí",
-      telefono: "(604) 830-5625",
-      camas: 40,
-      lat: 6.7731,
-      lon: -74.7994,
-      especialidades: ["Urgencias", "Medicina General", "Laboratorio", "Hospitalización"]
-    },
-    {
-      id: 27,
-      nombre: "Hospital La Misericordia (Yalí)",
-      tipo: "Hospital Público",
-      direccion: "Calle 18 #23-24, Yalí",
-      telefono: "(604) 867-5655",
-      camas: 35,
-      lat: 6.6767,
-      lon: -74.8411,
-      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
-    },
-    {
-      id: 28,
-      nombre: "Hospital San Vicente de Remedios",
-      tipo: "Hospital Público",
-      direccion: "Calle Las Palmas #12-120, Remedios",
-      telefono: "(604) 830-3727",
-      camas: 50,
-      lat: 7.0275,
-      lon: -74.6939,
-      especialidades: ["Urgencias", "Medicina General", "Cirugía", "Ginecología"]
-    },
-    {
-      id: 29,
-      nombre: "Hospital San Juan de Dios (Segovia)",
-      tipo: "Hospital Público",
-      direccion: "Campamento La Salada, Segovia",
-      telefono: "(604) 831-5626",
-      camas: 45,
-      lat: 6.9933,
-      lon: -74.6722,
-      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
-    },
-    {
-      id: 30,
-      nombre: "Hospital San Antonio (Zaragoza)",
-      tipo: "Hospital Público",
-      direccion: "Calle 25 #17C1, Zaragoza",
-      telefono: "(604) 838-8312",
-      camas: 40,
-      lat: 7.1333,
-      lon: -74.8667,
-      especialidades: ["Urgencias", "Medicina General", "Laboratorio"]
-    },
-    {
-      id: 31,
-      nombre: "Hospital San Antonio (Cisneros)",
-      tipo: "Hospital Público",
-      direccion: "Calle 18 #17-105, Cisneros",
-      telefono: "(604) 863-2255",
-      camas: 30,
-      lat: 6.7000,
-      lon: -75.0833,
-      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
-    },
-    {
-      id: 32,
-      nombre: "Hospital San José (Caracolí)",
-      tipo: "Hospital Público",
-      direccion: "Carrera 10 #10-50, Caracolí",
-      telefono: "(604) 855-1919",
-      camas: 25,
-      lat: 6.4000,
-      lon: -74.7500,
       especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
     },
     {
@@ -405,6 +63,28 @@
       especialidades: ["Centro Poblado"]
     },
     {
+      id: 18,
+      nombre: "Hospital San Roque",
+      tipo: "Hospital Público",
+      direccion: "Calle 10 #10-51, San Roque",
+      telefono: "(604) 855-5896",
+      camas: 50,
+      lat: 6.48528,
+      lon: -75.01972,
+      especialidades: ["Urgencias", "Medicina General", "Odontología", "Laboratorio"]
+    },
+    {
+      id: 31,
+      nombre: "Hospital San Antonio (Cisneros)",
+      tipo: "Hospital Público",
+      direccion: "Calle 18 #17-105, Cisneros",
+      telefono: "(604) 863-2255",
+      camas: 30,
+      lat: 6.7000,
+      lon: -75.0833,
+      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
+    },
+    {
       id: 35,
       nombre: "Corregimiento Villa Nueva (Yolombó)",
       tipo: "Corregimiento",
@@ -414,10 +94,371 @@
       lat: 6.6299,
       lon: -75.1538,
       especialidades: ["Centro Poblado"]
+    },
+    {
+      id: 23,
+      nombre: "Hospital Santo Domingo",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Santo Domingo",
+      telefono: "(604) 855-1616",
+      camas: 40,
+      lat: 6.4667,
+      lon: -75.1667,
+      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
+    },
+    {
+      id: 27,
+      nombre: "Hospital La Misericordia (Yalí)",
+      tipo: "Hospital Público",
+      direccion: "Calle 18 #23-24, Yalí",
+      telefono: "(604) 867-5655",
+      camas: 35,
+      lat: 6.6767,
+      lon: -74.8411,
+      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
+    },
+    {
+      id: 21,
+      nombre: "Hospital Gómez Plata",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Gómez Plata",
+      telefono: "(604) 855-1414",
+      camas: 45,
+      lat: 6.6833,
+      lon: -75.2167,
+      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
+    },
+    {
+      id: 36,
+      nombre: "ESE Hospital Marco A. Cardona",
+      tipo: "Hospital",
+      direccion: "Carrera 30 # 33-237, Maceo",
+      telefono: "(604) 864-0283",
+      camas: 0,
+      lat: 6.5767,
+      lon: -74.7875,
+      especialidades: ["Urgencias", "Consulta Externa", "Hospitalización", "Laboratorio"]
+    },
+    {
+      id: 26,
+      nombre: "Hospital San Camilo de Vegachí",
+      tipo: "Hospital Público",
+      direccion: "Carrera 49a #50a-14, Vegachí",
+      telefono: "(604) 830-5625",
+      camas: 40,
+      lat: 6.7731,
+      lon: -74.7994,
+      especialidades: ["Urgencias", "Medicina General", "Laboratorio", "Hospitalización"]
+    },
+    {
+      id: 20,
+      nombre: "Hospital Carolina del Príncipe",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Carolina del Príncipe",
+      telefono: "(604) 855-1313",
+      camas: 40,
+      lat: 6.7500,
+      lon: -75.2833,
+      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
+    },
+    {
+      id: 37,
+      nombre: "ESE Hospital El Carmen",
+      tipo: "Hospital",
+      direccion: "Calle 23 # 23-40, Amalfi",
+      telefono: "(604) 830-0353",
+      camas: 0,
+      lat: 6.910925,
+      lon: -75.077171,
+      especialidades: ["Urgencias", "Consulta Externa", "Hospitalización"]
+    },
+    {
+      id: 32,
+      nombre: "Hospital San José (Caracolí)",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Caracolí",
+      telefono: "(604) 855-1919",
+      camas: 25,
+      lat: 6.4000,
+      lon: -74.7500,
+      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
+    },
+    {
+      id: 39,
+      nombre: "ESE Hospital San Vicente de Paúl",
+      tipo: "Hospital",
+      direccion: "Carrera 17 # 10-34, Barbosa",
+      telefono: "(604) 520-2430",
+      camas: 0,
+      lat: 6.4414,
+      lon: -75.3284,
+      especialidades: ["Urgencias", "Consulta Externa", "Hospitalización"]
+    },
+    {
+      id: 19,
+      nombre: "Hospital Donmatías",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Donmatías",
+      telefono: "(604) 855-1212",
+      camas: 60,
+      lat: 6.4867,
+      lon: -75.3917,
+      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
+    },
+    {
+      id: 25,
+      nombre: "Hospital Angostura",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Angostura",
+      telefono: "(604) 855-1818",
+      camas: 35,
+      lat: 6.8833,
+      lon: -75.3333,
+      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
+    },
+    {
+      id: 24,
+      nombre: "Hospital Campamento",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Campamento",
+      telefono: "(604) 855-1717",
+      camas: 30,
+      lat: 6.9833,
+      lon: -75.3000,
+      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
+    },
+    {
+      id: 38,
+      nombre: "ESE Hospital San Juan de Dios",
+      tipo: "Hospital",
+      direccion: "Carrera 29 # 15-31, Anorí",
+      telefono: "(604) 835-0803",
+      camas: 0,
+      lat: 7.072657,
+      lon: -75.145669,
+      especialidades: ["Urgencias 24h", "Consulta Externa", "Hospitalización", "Laboratorio"]
+    },
+    {
+      id: 17,
+      nombre: "Hospital Santa Rosa de Osos",
+      tipo: "Hospital Público",
+      direccion: "Calle 44 #49B-90, Santa Rosa de Osos",
+      telefono: "(604) 855-2029",
+      camas: 60,
+      lat: 6.8400,
+      lon: -75.4600,
+      especialidades: ["Urgencias", "Medicina General", "Pediatría", "Ginecología"]
+    },
+    {
+      id: 29,
+      nombre: "Hospital San Juan de Dios (Segovia)",
+      tipo: "Hospital Público",
+      direccion: "Campamento La Salada, Segovia",
+      telefono: "(604) 831-5626",
+      camas: 45,
+      lat: 6.9933,
+      lon: -74.6722,
+      especialidades: ["Urgencias", "Medicina General", "Pediatría"]
+    },
+    {
+      id: 28,
+      nombre: "Hospital San Vicente de Remedios",
+      tipo: "Hospital Público",
+      direccion: "Calle Las Palmas #12-120, Remedios",
+      telefono: "(604) 830-3727",
+      camas: 50,
+      lat: 7.0275,
+      lon: -74.6939,
+      especialidades: ["Urgencias", "Medicina General", "Cirugía", "Ginecología"]
+    },
+    {
+      id: 16,
+      nombre: "Hospital San Juan de Dios (Yarumal)",
+      tipo: "Hospital Público",
+      direccion: "Carrera 23 #12-13, Yarumal",
+      telefono: "(604) 853-7373",
+      camas: 80,
+      lat: 6.9633,
+      lon: -75.4172,
+      especialidades: ["Urgencias", "Medicina General", "Especializada", "Laboratorio", "Hospitalización"]
+    },
+    {
+      id: 30,
+      nombre: "Hospital San Antonio (Zaragoza)",
+      tipo: "Hospital Público",
+      direccion: "Calle 25 #17C1, Zaragoza",
+      telefono: "(604) 838-8312",
+      camas: 40,
+      lat: 7.1333,
+      lon: -74.8667,
+      especialidades: ["Urgencias", "Medicina General", "Laboratorio"]
+    },
+    {
+      id: 13,
+      nombre: "Hospital San Juan de Dios (Rionegro)",
+      tipo: "Hospital Público",
+      direccion: "Carrera 51 #56-20, Rionegro",
+      telefono: "(604) 605-4949",
+      camas: 100,
+      lat: 6.1530,
+      lon: -75.3750,
+      especialidades: ["Urgencias", "Medicina Interna", "Pediatría", "Cirugía"]
+    },
+    {
+      id: 11,
+      nombre: "Hospital San Juan de Dios (Bello)",
+      tipo: "Hospital Público",
+      direccion: "Carrera 49 #61-81, Bello",
+      telefono: "(604) 605-4949",
+      camas: 120,
+      lat: 6.3350,
+      lon: -75.5530,
+      especialidades: ["Urgencias", "Medicina Interna", "Pediatría", "Ginecología"]
+    },
+    {
+      id: 14,
+      nombre: "Hospital Mental de Antioquia",
+      tipo: "Hospital Público",
+      direccion: "Calle 31 #32-14, Medellín",
+      telefono: "(604) 320-1212",
+      camas: 200,
+      lat: 6.2680,
+      lon: -75.5610,
+      especialidades: ["Psiquiatría", "Salud Mental", "Adicciones", "Neurología"]
+    },
+    {
+      id: 4,
+      nombre: "Hospital Universitario San Jorge",
+      tipo: "Hospital Público",
+      direccion: "Calle 64 #5-85, Medellín",
+      telefono: "(604) 444-4444",
+      camas: 380,
+      lat: 6.2620,
+      lon: -75.5650,
+      especialidades: ["Urgencias", "Traumatología", "Medicina Interna", "Cirugía"]
+    },
+    {
+      id: 9,
+      nombre: "Hospital Infantil San Juan de Dios",
+      tipo: "Hospital Público",
+      direccion: "Carrera 50 #58-18, Medellín",
+      telefono: "(604) 444-8800",
+      camas: 180,
+      lat: 6.2380,
+      lon: -75.5540,
+      especialidades: ["Pediatría", "Neonatología", "Cirugía Pediátrica", "Urgencias Pediátricas"]
+    },
+    {
+      id: 5,
+      nombre: "Hospital Alma Máter de Antioquia",
+      tipo: "Hospital Público",
+      direccion: "Calle 69 #51C-24, Medellín",
+      telefono: "(604) 604-9595",
+      camas: 300,
+      lat: 6.2420,
+      lon: -75.5620,
+      especialidades: ["Urgencias", "Pediatría", "Ginecología", "Cirugía General"]
+    },
+    {
+      id: 3,
+      nombre: "Hospital Pablo Tobón Uribe",
+      tipo: "Hospital Privado",
+      direccion: "Carrera 51D #60-100, Medellín",
+      telefono: "(604) 444-0555",
+      camas: 450,
+      lat: 6.2350,
+      lon: -75.5580,
+      especialidades: ["Urgencias", "Cardiovascular", "Neurología", "Oncología", "Ortopedia"]
+    },
+    {
+      id: 1,
+      nombre: "Hospital San Vicente Fundación",
+      tipo: "Hospital Privado",
+      direccion: "Calle 64 #51D-154, Medellín",
+      telefono: "(604) 444-1333",
+      camas: 650,
+      lat: 6.2445,
+      lon: -75.5685,
+      especialidades: ["Urgencias", "Alta complejidad", "Trasplantes", "Oncología", "Neurocirugía", "Quemados"]
+    },
+    {
+      id: 2,
+      nombre: "Hospital General de Medellín",
+      tipo: "Hospital Público",
+      direccion: "Carrera 48 #32-102, Medellín",
+      telefono: "(604) 384-7300",
+      camas: 520,
+      lat: 6.2490,
+      lon: -75.5740,
+      especialidades: ["Urgencias", "Cirugía", "Medicina Interna", "Pediatría", "Ginecología"]
+    },
+    {
+      id: 7,
+      nombre: "Hospital de la Mujer",
+      tipo: "Hospital Público",
+      direccion: "Carrera 42 #5-50, Medellín",
+      telefono: "(604) 444-3333",
+      camas: 200,
+      lat: 6.2250,
+      lon: -75.5680,
+      especialidades: ["Ginecología", "Obstetricia", "Neonatología", "Planificación Familiar"]
+    },
+    {
+      id: 10,
+      nombre: "Clínica El Rosario",
+      tipo: "Clínica Privada",
+      direccion: "Carrera 43A #1-50, Medellín",
+      telefono: "(604) 444-0555",
+      camas: 150,
+      lat: 6.2050,
+      lon: -75.5710,
+      especialidades: ["Cardiología", "Oftalmología", "Odontología", "Cirugía General"]
+    },
+    {
+      id: 6,
+      nombre: "Clínica Cardio VID",
+      tipo: "Clínica Privada",
+      direccion: "Carrera 43 #1-50, Medellín",
+      telefono: "(604) 444-0555",
+      camas: 120,
+      lat: 6.2090,
+      lon: -75.5750,
+      especialidades: ["Cardiología", "Cirugía Cardiovascular", "Hemodinámica", "Rehabilitación Cardíaca"]
+    },
+    {
+      id: 8,
+      nombre: "Centro Médico Imbanaco",
+      tipo: "Centro Médico",
+      direccion: "Carrera 38A #5-100, Medellín",
+      telefono: "(604) 444-5555",
+      camas: 280,
+      lat: 6.2180,
+      lon: -75.5820,
+      especialidades: ["Urgencias", "Cirugía Plástica", "Rehabilitación", "Medicina Deportiva"]
+    },
+    {
+      id: 15,
+      nombre: "Hospital San Rafael (Santa Fe de Antioquia)",
+      tipo: "Hospital Público",
+      direccion: "Carrera 10 #10-50, Santa Fe de Antioquia",
+      telefono: "(604) 836-1212",
+      camas: 50,
+      lat: 6.5560,
+      lon: -75.8260,
+      especialidades: ["Urgencias", "Medicina General", "Atención Básica"]
+    },
+    {
+      id: 12,
+      nombre: "Hospital San Fernando (Amagá)",
+      tipo: "Hospital Público",
+      direccion: "Carrera 51 #52-81, Amagá",
+      telefono: "(604) 847-2121",
+      camas: 80,
+      lat: 6.0380,
+      lon: -75.7030,
+      especialidades: ["Urgencias", "Medicina General", "Cirugía General"]
     }
   ];
-
-  aplicarEdicionesHospitales();
 
   var hospitalesLayers = {};
   var coberturaLayers = {};
@@ -486,7 +527,6 @@
   var lista = $("#vehiculos");
   var elConexion = $("#conexion");
   var elConexionTexto = $("#conexion-texto");
-  var alertaInicial = $("#alerta-inicial");
   var modal = $("#modal");
   var toastEl = $("#toast");
   var formConfig = $("#form-config");
@@ -517,12 +557,6 @@
       if (guardado) return JSON.parse(guardado) || {};
     } catch (e) {}
     return {};
-  }
-
-  function guardarConsumos() {
-    try {
-      localStorage.setItem(CLAVE_CONSUMOS, JSON.stringify(consumosPorVehiculo));
-    } catch (e) {}
   }
 
   function cargarConductores() {
@@ -565,39 +599,6 @@
     try {
       localStorage.setItem(CLAVE_POIS, JSON.stringify(pois));
     } catch (e) {}
-  }
-
-  function cargarHospitalesEditados() {
-    try {
-      var guardado = localStorage.getItem(CLAVE_HOSPITALES_EDITADOS);
-      if (guardado) return JSON.parse(guardado) || {};
-    } catch (e) {}
-    return {};
-  }
-
-  function guardarHospitalesEditados() {
-    try {
-      var editados = {};
-      hospitales.forEach(function (h) {
-        if (h._editado) {
-          editados[h.id] = { lat: h.lat, lon: h.lon, direccion: h.direccion, telefono: h.telefono };
-        }
-      });
-      localStorage.setItem(CLAVE_HOSPITALES_EDITADOS, JSON.stringify(editados));
-    } catch (e) {}
-  }
-
-  function aplicarEdicionesHospitales() {
-    var editados = cargarHospitalesEditados();
-    hospitales.forEach(function (h) {
-      if (editados[h.id]) {
-        h.lat = editados[h.id].lat;
-        h.lon = editados[h.id].lon;
-        if (editados[h.id].direccion) h.direccion = editados[h.id].direccion;
-        if (editados[h.id].telefono) h.telefono = editados[h.id].telefono;
-        h._editado = true;
-      }
-    });
   }
 
   function registrarVelocidad(id, velocidad) {
@@ -686,13 +687,6 @@
 
   function intentarLogin(email, password, baseUrl) {
     var base = (baseUrl || config.baseUrl || "http://localhost:3000").trim().replace(/\/+$/, "");
-    var cfgLogin = {
-      baseUrl: base,
-      authType: "basic",
-      user: email,
-      password: password,
-      token: ""
-    };
     return fetch(base + "/api/session", {
       method: "POST",
       headers: {
@@ -770,7 +764,6 @@
   function iniciarSesionApp() {
     ocultarLogin();
     aplicarSesionUI();
-    alertaInicial.hidden = true;
     $("#btn-refrescar").disabled = false;
     iniciarConexion();
   }
@@ -810,7 +803,6 @@
       .then(function (res) {
         var dispositivos = res[0];
         var posiciones = res[1];
-        ultimasPosiciones = posiciones;
         var seleccion = dispositivos.slice();
         if (config.deviceIds.length) {
           seleccion = seleccion.filter(function (d) {
@@ -834,8 +826,6 @@
         refrescando = false;
       });
   }
-
-  var ultimasPosiciones = [];
 
   function calcularDistanciasDePosiciones() {
     var hoyClave = new Date().toDateString();
@@ -1512,7 +1502,14 @@
       for (var i = 0; i < hospitales.length; i++) {
         if (hospitales[i].id === parseInt(id, 10)) { h = hospitales[i]; break; }
       }
-      if (h) { h.lat = custom[id].lat; h.lon = custom[id].lon; }
+      if (!h) return;
+      var c = custom[id];
+      if (typeof c.lat === "number") h.lat = c.lat;
+      if (typeof c.lon === "number") h.lon = c.lon;
+      if (c.direccion) h.direccion = c.direccion;
+      if (c.telefono) h.telefono = c.telefono;
+      if (c.nombre) h.nombre = c.nombre;
+      if (c.tipo) h.tipo = c.tipo;
     });
   }
 
@@ -1543,19 +1540,30 @@
       mostrarToast("Completa las coordenadas.", "error");
       return;
     }
+    var nombre = $("#hospital-nombre").value.trim();
+    var tipo = $("#hospital-tipo").value.trim();
+    var direccion = $("#hospital-direccion").value.trim();
+    var telefono = $("#hospital-telefono").value.trim();
+    if (!nombre) {
+      mostrarToast("Escribe el nombre del hospital.", "error");
+      return;
+    }
     for (var i = 0; i < hospitales.length; i++) {
       if (hospitales[i].id === hospitalEditandoId) {
+        hospitales[i].nombre = nombre;
+        hospitales[i].tipo = tipo;
         hospitales[i].lat = lat;
         hospitales[i].lon = lon;
-        hospitales[i].direccion = $("#hospital-direccion").value.trim();
-        hospitales[i].telefono = $("#hospital-telefono").value.trim();
+        hospitales[i].direccion = direccion;
+        hospitales[i].telefono = telefono;
         break;
       }
     }
     var custom = cargarHospitalesCustom();
-    custom[hospitalEditandoId] = { lat: lat, lon: lon };
+    custom[hospitalEditandoId] = { nombre: nombre, tipo: tipo, lat: lat, lon: lon, direccion: direccion, telefono: telefono };
     guardarHospitalesCustom(custom);
     cerrarModalHospital();
+    renderHospitales();
     mostrarToast("Hospital actualizado.", "success");
     if (capasVisibles.hospitales) { dibujarHospitales(); }
   }
@@ -1788,9 +1796,7 @@
       expandBtn.onclick = function () {
         var visible = !expandSection.hidden;
         expandSection.hidden = visible;
-        expandBtn.innerHTML = visible
-          ? '<svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg>'
-          : '<svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg>';
+        expandBtn.innerHTML = visible ? "Ver +" : "Ver −";
         expandBtn.title = visible ? "Mostrar todos" : "Ocultar";
         expandBtn.setAttribute("aria-label", expandBtn.title);
       };
@@ -1865,7 +1871,6 @@
     pbMarcadoresFin = [];
   }
 
-  var pbPosiciones = [];
   var pbIndex = 0;
   var pbIntervalo = null;
   var pbMarcador = null;
@@ -1929,7 +1934,6 @@
     }
     limpiarHistorial();
     detenerPlayback();
-    pbPosiciones = [];
     pbDetalles = [];
     pbIndex = 0;
     $("#hist-controles").style.display = "none";
@@ -2058,7 +2062,6 @@
         }
       });
       info.innerHTML = "<strong>" + viajes.length + " viajes (Traccar)</strong> · " + (kmTotal / 1000).toFixed(1) + " km · " + Math.round(duracionMin) + " min totales";
-      pbPosiciones = viajes;
       pbIndex = 0;
       $("#hist-controles").style.display = "";
       $("#pb-slider").max = viajes.length - 1;
@@ -2154,9 +2157,6 @@
       }, 200 / vel);
     }
   }
-
-  var reporteData = [];
-  var reporteColumnas = [];
 
   function generarReporte() {
     var tipo = $("#reporte-tipo").value;
@@ -2647,27 +2647,14 @@
 
   function tarjeta(v) {
     var clasesBadge = { moving: "success", stopped: "info", offline: "warning", nodata: "neutral" };
-    var enc = v.encendido === null ? "—" : (v.encendido ? "Sí" : "No");
-    var dist = v.distancia === null ? "—" : (v.distancia / 1000).toLocaleString("es", { maximumFractionDigits: 1 }) + " km";
-    var combust = v.litros === null
-      ? "—"
-      : v.litros.toLocaleString("es", { maximumFractionDigits: 1 }) + " L" + (v.costo === null ? "" : " · $ " + Math.round(v.costo).toLocaleString("es-CO"));
-    var coords = v.tienePosicion ? v.lat.toFixed(5) + ", " + v.lon.toFixed(5) : "—";
-    var direccion = v.direccion || (v.tienePosicion ? "Sin dirección registrada" : "Sin posición");
-    var hora = v.hora ? desdeHace(v.hora) + " · " + horaLocal(v.hora) : "—";
-    var curso = v.curso !== null ? v.curso + "°" : "—";
     var mapLink = v.tienePosicion ? '<button class="text-link" type="button" data-ver-mapa="' + v.id + '">Ver en mapa</button>' : '<span>Sin coordenadas</span>';
     var sosBadge = v.sos ? '<span class="badge badge--danger badge--sos">SOS ACTIVO</span>' : "";
     var estadoBadge = v.estado.tipo === "offline" ? "" : '<span class="badge badge--' + clasesBadge[v.estado.tipo] + ' badge--estado">' + v.estado.etiqueta + '</span>';
-    var conductor = conductores[v.id] || "";
     var velocidadBadge = "";
     var limite = parseFloat(config.limiteVelocidad) || 80;
     if (v.velocidad > limite) {
       velocidadBadge = '<span class="badge badge--danger badge--sos">EXCESO ' + v.velocidad + ' km/h</span>';
     }
-    var stats = estadisticasVelocidad(v.id);
-    var velStatsHtml = '<div class="vehicle__stat-speed"><span class="vehicle__stat-label">Máx / Promedio</span><span class="vehicle__stat-value">' + stats.max + ' / ' + stats.promedio + ' km/h</span></div>';
-    var tiempoQuietoStr = tiempoQuietoHtml(v.id);
     var referencias = v.tienePosicion ? buscarReferenciasCercanas(v.lat, v.lon, 7) : [];
     var refsHtml = "";
     if (referencias.length) {
@@ -2710,7 +2697,6 @@
     vehiculos.forEach(function (v) {
       if (!v.tienePosicion) return;
       visibles[v.id] = true;
-      var color = colorEstado(v.estado.tipo);
       if (!marcadores[v.id]) {
         var iconoVehiculo = L.divIcon({
           className: "poi-marker",
@@ -2734,20 +2720,15 @@
     });
   }
 
-  var mapaClaro = null;
-  var mapaOscuro = false;
-  var mapaActual = "claro";
-
   function inicializarMapa() {
     mapa = L.map("mapa").setView([4.6990, -74.0830], 12);
-    mapaClaro = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19
     }).addTo(mapa);
     var guardado = localStorage.getItem(CLAVE_MAPA_OSCURO);
     if (guardado === "true") {
       document.getElementById("mapa").classList.add("mapa-dark");
-      mapaOscuro = true;
     }
   }
 
@@ -2759,12 +2740,7 @@
     } else {
       mapaEl.classList.remove("mapa-dark");
     }
-    mapaOscuro = activo;
     localStorage.setItem(CLAVE_MAPA_OSCURO, activo);
-  }
-
-  function colorEstado(tipo) {
-    return { moving: "#16a34a", stopped: "#2563eb", offline: "#d97706", nodata: "#94a3b8" }[tipo] || "#94a3b8";
   }
 
   function tituloPopup(v) {
@@ -2848,18 +2824,6 @@
     return new Date().toISOString();
   }
 
-  function isoInicioHoy() {
-    var d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString();
-  }
-
-  function inicioDeHoy() {
-    var d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.getTime();
-  }
-
   function desdeHace(iso) {
     var dif = Date.now() - new Date(iso).getTime();
     if (dif < 0) return "hace un momento";
@@ -2920,18 +2884,6 @@
     return referencias;
   }
 
-  function referenciasHtml(lat, lon) {
-    var refs = buscarReferenciasCercanas(lat, lon, 7);
-    if (!refs.length) return "";
-    var html = '<div class="vehicle__refs"><span class="vehicle__refs-title">📍 Cerca de:</span>';
-    for (var i = 0; i < refs.length && i < 2; i++) {
-      var icono = refs[i].tipo === "hospital" ? "🏥" : "📌";
-      html += '<span class="vehicle__ref">' + icono + ' ' + esc(refs[i].nombre) + ' (' + refs[i].distancia.toFixed(1) + ' km)</span>';
-    }
-    html += '</div>';
-    return html;
-  }
-
   function hostCorto() {
     try { return new URL(config.baseUrl).host; } catch (e) { return config.baseUrl; }
   }
@@ -2947,16 +2899,6 @@
     toastEl.className = "toast" + (tipo ? " toast--" + tipo : "");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toastEl.hidden = true; }, 4500);
-  }
-
-  function setAlerta(tipo, titulo, texto, botonTexto, onBoton) {
-    alertaInicial.className = "alert alert--" + tipo;
-    alertaInicial.hidden = false;
-    $("#alerta-inicial-titulo").textContent = titulo;
-    $("#alerta-inicial-texto").textContent = texto;
-    var btn = $("#btn-alerta");
-    btn.textContent = botonTexto;
-    btn.onclick = onBoton;
   }
 
   function abrirModal() {
@@ -3068,7 +3010,6 @@
     guardarConfig(config);
     vehiculos = [];
     $("#btn-refrescar").disabled = false;
-    alertaInicial.hidden = true;
     cerrarModal();
     if (haySesion()) {
       iniciarConexion();
@@ -3202,8 +3143,6 @@
     return ["Juan Pérez", "María García", "Carlos López", "Ana Martínez", "Pedro Sánchez"];
   }
 
-  listaConductores = cargarListaConductores();
-
   function iniciar() {
     aplicarHospitalesCustom();
     lista.addEventListener("click", function (e) {
@@ -3212,22 +3151,6 @@
       var btnModal = e.target.closest("[data-abrir-modal-vehiculo]");
       if (btnModal) abrirModalVehiculo(parseInt(btnModal.getAttribute("data-abrir-modal-vehiculo"), 10));
     });
-    lista.addEventListener("change", function (e) {
-      var c = e.target.closest("[data-consumo]");
-      if (!c) return;
-      var id = parseInt(c.getAttribute("data-consumo"), 10);
-      var val = parseFloat(c.value);
-      if (!isFinite(val) || val <= 0) {
-        mostrarToast("Consumo no válido. Usa un número mayor a 0.", "error");
-        c.value = consumoVehiculo(id);
-        return;
-      }
-      consumosPorVehiculo[id] = val;
-      guardarConsumos();
-      mostrarToast("Consumo del vehículo " + id + " actualizado a " + val + " L/100km.", "success");
-      refrescar();
-    });
-
     lista.addEventListener("change", function (e) {
       var c = e.target.closest("[data-conductor]");
       if (!c) return;
@@ -3494,12 +3417,17 @@
     }
 
     document.getElementById("hospitales").addEventListener("click", function (e) {
+      var editar = e.target.closest("[data-editar-hospital]");
+      if (editar) {
+        abrirModalHospital(parseInt(editar.getAttribute("data-editar-hospital"), 10));
+        return;
+      }
       var btn = e.target.closest("[data-ver-hospital]");
       if (btn) {
         var id = parseInt(btn.getAttribute("data-ver-hospital"), 10);
         for (var i = 0; i < hospitales.length; i++) {
           if (hospitales[i].id === id && mapa) {
-      document.querySelector(".map-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+            document.querySelector(".map-wrap").scrollIntoView({ behavior: "smooth", block: "start" });
             mapa.setView([hospitales[i].lat, hospitales[i].lon], 14);
             break;
           }
@@ -3556,7 +3484,6 @@
 
     $("#btn-cerrar-rutas").addEventListener("click", function () {
       limpiarHistorial();
-      pbPosiciones = [];
       pbDetalles = [];
       pbIndex = 0;
       $("#hist-controles").style.display = "none";

@@ -358,8 +358,7 @@ a {
 
 .nav-icon .icon,
 .button .icon,
-.map-dark-toggle__icon .icon,
-.hospital-summary__expand .icon {
+.map-dark-toggle__icon .icon {
   width: 1.15rem;
   height: 1.15rem;
 }
@@ -976,19 +975,6 @@ a {
   display: block;
   font-weight: 700;
   font-size: var(--fs-md);
-}
-
-.vehicle__consumo label {
-  display: block;
-  font-size: var(--fs-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-muted);
-  margin-bottom: var(--sp-1);
-}
-
-.vehicle__consumo input {
-  width: 100%;
 }
 
 .vehicle__meta {
@@ -1692,15 +1678,17 @@ a {
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
-  width: 2.4rem;
   height: 2.4rem;
-  font-size: var(--fs-md);
+  padding: 0 0.75rem;
+  font-size: var(--fs-sm);
+  font-weight: 600;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   transition: all var(--transition);
   flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .hospital-summary__expand:hover {

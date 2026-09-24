@@ -35,7 +35,7 @@ fleet-manager/
 | `flota_velocidades_v1` | Historial de velocidades (máx/prom) por vehículo |
 | `flota_modo_oscuro` | Booleano para modo oscuro |
 | `flota_pois` | Array de puntos de interés guardados |
-| `flota_hospitales_editados` | Coordenadas editadas de hospitales |
+| `flota_hospitales_custom` | Ediciones de hospitales (lat, lon, dirección, teléfono) |
 | `flota_lista_conductores` | Lista de nombres de conductores disponibles |
 
 ### Configuración por defecto
@@ -288,11 +288,10 @@ var CONFIG_POR_DEFECTO = {
 #### Notificaciones
 - `mostrarToast(msg, tipo)`: Muestra toast con auto-hide
 - `notificarEvento(e)`: Toast para eventos nuevos (geofence/SOS)
-- `setAlerta(tipo, titulo, msg, btnTexto, btnAccion)`: Alerta inline
 
 #### Persistencia
 - `cargarConfig()` / `guardarConfig(cfg)`: JSON en localStorage
-- `cargarConsumos()` / `guardarConsumos()`: Mapa id→consumo
+- `cargarConsumos()`: Mapa id→consumo (lectura; la edición por tarjeta fue retirada)
 - `cargarConductores()` / `guardarConductores()`: Mapa id→nombre
 - `cargarVelocidades()` / `guardarVelocidades()`: Historial de vel
 - `cargarPois()` / `guardarPois()`: Array de POIs
@@ -368,7 +367,7 @@ var CONFIG_POR_DEFECTO = {
 | `.modal--vehiculo` | max-width 640px |
 | `.toast` | Fixed bottom-right, z-index 70, animación slide-up |
 | `.hospital-summary` | Flex, bg surface, border, shadow, padding 0.85rem |
-| `.hospital-summary__expand` | Botón primary 2.4rem, +/− toggle |
+| `.hospital-summary__expand` | Botón primary, texto "Ver +"/"Ver −" toggle |
 | `.vehiculo-modal-grid` | Grid 3 columnas para stats del modal |
 | `.layer-control` | Absolute top-right sobre mapa, z-index 1000 |
 | `.map-wrap` | Relative, height 420px, overflow hidden |
