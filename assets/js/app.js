@@ -489,6 +489,7 @@
   var eventos = [];
   var idsVistos = {};
   var sosVistos = {};
+  var estadoCruce = {};
   var ultimaRevision = 0;
   var DOS_HORAS = 2 * 60 * 60 * 1000;
 
@@ -505,6 +506,14 @@
       }
       var guardadosIds = localStorage.getItem("flota_idsVistos");
       if (guardadosIds) idsVistos = JSON.parse(guardadosIds);
+      var guardadosCruces = localStorage.getItem("flota_cruces_v1");
+      if (guardadosCruces) estadoCruce = JSON.parse(guardadosCruces);
+    } catch (e) { /* ignore */ }
+  }
+
+  function guardarEstadoCruce() {
+    try {
+      localStorage.setItem("flota_cruces_v1", JSON.stringify(estadoCruce));
     } catch (e) { /* ignore */ }
   }
 
@@ -817,6 +826,7 @@
         });
         return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
       }).then(function () {
+        detectarCrucesGeozona();
         detectarSosDesdePosiciones();
         mostrarResultados();
         calcularDistanciasDePosiciones();
@@ -908,11 +918,21 @@
   }
 
   function cargarGeozonas() {
-    return llamarApi("/geofences")
-      .then(function (lista) {
-        var arr = Array.isArray(lista) ? lista : [];
+    return Promise.all([
+      llamarApi("/geofences"),
+      llamarApi("/permissions").catch(function () { return []; })
+    ])
+      .then(function (res) {
+        var arr = Array.isArray(res[0]) ? res[0] : [];
+        var perms = Array.isArray(res[1]) ? res[1] : [];
+        var porGeozona = {};
+        perms.forEach(function (p) {
+          if (!p.geofenceId) return;
+          if (!porGeozona[p.geofenceId]) porGeozona[p.geofenceId] = [];
+          if (p.deviceId != null) porGeozona[p.geofenceId].push(p.deviceId);
+        });
         geozonas = arr.map(function (g) {
-          g.dispositivos = [];
+          g.dispositivos = porGeozona[g.id] || [];
           g._area = parsearGeozona(g.area);
           return g;
         });
@@ -1090,6 +1110,80 @@
     mostrarToast("¡SOS! Alarma de pánico desde " + v.nombre, "error");
     renderAlarmas();
     guardarEventosLocal();
+  }
+
+  function puntoEnGeozona(g, lat, lon) {
+    if (!g._area) return false;
+    if (g._area.tipo === "circle") {
+      return distanciaKm(lat, lon, g._area.lat, g._area.lon) * 1000 <= g._area.radio;
+    }
+    if (g._area.tipo === "polygon") {
+      var pts = g._area.puntos;
+      var dentro = false;
+      for (var i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        var yi = pts[i][0], xi = pts[i][1];
+        var yj = pts[j][0], xj = pts[j][1];
+        if (((yi > lat) !== (yj > lat)) &&
+          (lon < (xj - xi) * (lat - yi) / (yj - yi) + xi)) dentro = !dentro;
+      }
+      return dentro;
+    }
+    return false;
+  }
+
+  function eventoGeozonaDuplicado(tipo, vehiculo, geozona, horaMs) {
+    return eventos.some(function (e) {
+      return e.tipo === tipo && e.vehiculo === vehiculo && e.geozona === geozona &&
+        Math.abs(new Date(e.hora).getTime() - horaMs) < 180000;
+    });
+  }
+
+  function detectarCrucesGeozona() {
+    if (!geozonas.length || !vehiculos.length) return;
+    var huboCambio = false;
+    geozonas.forEach(function (g) {
+      if (!g._area) return;
+      var aplicar = g.dispositivos && g.dispositivos.length
+        ? g.dispositivos
+        : vehiculos.map(function (v) { return v.id; });
+      vehiculos.forEach(function (v) {
+        if (!v.tienePosicion || v.lat == null || v.lon == null) return;
+        if (aplicar.indexOf(v.id) === -1) return;
+        var clave = g.id + ":" + v.id;
+        var dentro = puntoEnGeozona(g, v.lat, v.lon);
+        var previo = Object.prototype.hasOwnProperty.call(estadoCruce, clave)
+          ? estadoCruce[clave]
+          : null;
+        if (previo === null) {
+          estadoCruce[clave] = dentro;
+          huboCambio = true;
+          return;
+        }
+        if (previo === dentro) return;
+        estadoCruce[clave] = dentro;
+        huboCambio = true;
+        var ahora = Date.now();
+        var tipo = dentro ? "geofenceEnter" : "geofenceExit";
+        if (eventoGeozonaDuplicado(tipo, v.nombre, g.name, ahora)) return;
+        var ev = {
+          id: "local-" + g.id + "-" + v.id + "-" + (dentro ? "in" : "out") + "-" + ahora,
+          tipo: tipo,
+          vehiculo: v.nombre,
+          geozona: g.name,
+          hora: new Date(ahora).toISOString()
+        };
+        eventos.unshift(ev);
+        eventos = eventos.slice(0, 40);
+        idsVistos[ev.id] = true;
+        mostrarToast(
+          v.nombre + (dentro ? " entró a " : " salió de ") + g.name,
+          dentro ? "success" : "warning"
+        );
+        renderAlarmas();
+      });
+    });
+    if (huboCambio) guardarEstadoCruce();
+    if (huboCambio) guardarEventosLocal();
   }
 
   function detectarSosDesdePosiciones() {
@@ -1273,6 +1367,10 @@
       var cuerpoEditar = { id: idEditar, name: nombre, description: descripcion, area: area };
       llamarApi("/geofences/" + idEditar, null, { metodo: "PUT", cuerpo: cuerpoEditar })
         .then(function () {
+          Object.keys(estadoCruce).forEach(function (k) {
+            if (k.indexOf(idEditar + ":") === 0) delete estadoCruce[k];
+          });
+          guardarEstadoCruce();
           cerrarModalGeozona();
           mostrarToast("Geozona actualizada.", "success");
           refrescar();
@@ -1375,6 +1473,10 @@
     if (!confirm("¿Eliminar la geozona '" + (g ? g.name : id) + "'? También se quitan sus asignaciones.")) return;
     llamarApi("/geofences/" + id, null, { metodo: "DELETE" })
       .then(function () {
+        Object.keys(estadoCruce).forEach(function (k) {
+          if (k.indexOf(id + ":") === 0) delete estadoCruce[k];
+        });
+        guardarEstadoCruce();
         mostrarToast("Geozona eliminada.", "success");
         refrescar();
       })
