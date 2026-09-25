@@ -489,6 +489,7 @@
   var eventos = [];
   var idsVistos = {};
   var sosVistos = {};
+  var toastVistos = {};
   var estadoCruce = {};
   var historialEventos = [];
   var ultimaRevision = 0;
@@ -1134,9 +1135,9 @@
     sos: { t: "SOS", corto: "SOS", c: "danger", toast: true },
     deviceMoving: { t: "En movimiento", corto: "En movimiento", c: "success", toast: false },
     deviceStopped: { t: "Se detuvo", corto: "Detenido", c: "warning", toast: true },
-    deviceOnline: { t: "Conectado", corto: "Conectado", c: "success", toast: false },
+    deviceOnline: { t: "Conectado", corto: "Conectado", c: "success", toast: false, feed: false },
     deviceOffline: { t: "Sin conexión", corto: "Sin conexión", c: "danger", toast: true },
-    deviceUnknown: { t: "Sin señal", corto: "Sin señal", c: "neutral", toast: false },
+    deviceUnknown: { t: "Sin señal", corto: "Sin señal", c: "neutral", toast: false, feed: false },
     command: { t: "Comando enviado", corto: "Comando", c: "info", toast: false },
     commandResult: { t: "Comando ejecutado", corto: "Comando", c: "info", toast: false },
     maintenance: { t: "Mantenimiento", corto: "Mantenimiento", c: "warning", toast: false },
@@ -1329,13 +1330,14 @@
     var total = $("#alarmas-num");
     var dosHorasAtras = Date.now() - 2 * 60 * 60 * 1000;
     eventos = eventos.filter(function (e) { return new Date(e.hora).getTime() > dosHorasAtras; });
-    if (!eventos.length) {
-      contenedor.innerHTML = '<div class="vacio"><p><strong>Sin alarmas registradas.</strong></p><p class="note" style="margin-top:0.25rem;">Las alarmas SOS de los dispositivos, y las entradas/salidas de geozonas, aparecerán aquí en tiempo real.</p></div>';
+    var visibles = eventos.filter(function (e) { return metaEvento(e.tipo).feed !== false; });
+    if (!visibles.length) {
+      contenedor.innerHTML = '<div class="vacio"><p><strong>Sin alarmas registradas.</strong></p><p class="note" style="margin-top:0.25rem;">Alarmas SOS, entradas y salidas de geozonas, detenidos y desconexiones de los dispositivos aparecerán aquí en tiempo real.</p></div>';
       total.textContent = "0";
       return;
     }
-    total.textContent = String(eventos.length);
-    contenedor.innerHTML = eventos.map(eventoHTML).join("");
+    total.textContent = String(visibles.length);
+    contenedor.innerHTML = visibles.map(eventoHTML).join("");
   }
 
   function eventoHTML(e) {
@@ -1352,8 +1354,18 @@
   function notificarEvento(e) {
     var meta = metaEvento(e.type);
     if (meta.toast === false) return;
+    var nombreV = vehiculoNombre(e.deviceId);
+    var urgente = esAlarmatipo(e.type) || e.type === "geofenceEnter" || e.type === "geofenceExit";
+    if (!urgente) {
+      var clave = e.type + ":" + e.deviceId;
+      var ahora = Date.now();
+      if (toastVistos[clave] && ahora - toastVistos[clave] < 20 * 60 * 1000) return;
+      toastVistos[clave] = ahora;
+      var claves = Object.keys(toastVistos);
+      if (claves.length > 100) claves.slice(0, claves.length - 100).forEach(function (k) { delete toastVistos[k]; });
+    }
     mostrarToast(
-      fraseEvento({ tipo: e.type, vehiculo: vehiculoNombre(e.deviceId), geozona: geozonaNombre(e.geofenceId), attributes: e.attributes }),
+      fraseEvento({ tipo: e.type, vehiculo: nombreV, geozona: geozonaNombre(e.geofenceId), attributes: e.attributes }),
       toastColorEvento(meta.c)
     );
   }
