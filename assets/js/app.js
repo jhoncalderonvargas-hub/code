@@ -490,6 +490,7 @@
   var idsVistos = {};
   var sosVistos = {};
   var estadoCruce = {};
+  var historialEventos = [];
   var ultimaRevision = 0;
   var DOS_HORAS = 2 * 60 * 60 * 1000;
 
@@ -517,6 +518,31 @@
     } catch (e) { /* ignore */ }
   }
 
+  function cargarHistorialEventos() {
+    try {
+      var g = localStorage.getItem("flota_hist_eventos");
+      historialEventos = g ? JSON.parse(g) : [];
+      if (!Array.isArray(historialEventos)) historialEventos = [];
+    } catch (e) { historialEventos = []; }
+  }
+
+  function guardarHistorialEventos() {
+    try {
+      localStorage.setItem("flota_hist_eventos", JSON.stringify(historialEventos.slice(0, 500)));
+    } catch (e) { /* ignore */ }
+  }
+
+  function agregarAlHistorial(ev) {
+    historialEventos = historialEventos.filter(function (x) { return x.id !== ev.id; });
+    historialEventos.unshift(ev);
+    var cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    historialEventos = historialEventos.filter(function (x) {
+      var t = new Date(x.hora).getTime();
+      return t > cutoff;
+    }).slice(0, 500);
+    guardarHistorialEventos();
+  }
+
   function guardarEventosLocal() {
     try {
       localStorage.setItem("flota_eventos", JSON.stringify(eventos));
@@ -525,6 +551,7 @@
   }
 
   cargarEventosLocal();
+  cargarHistorialEventos();
   var filtroActual = { buscar: "", estado: "", conductor: "" };
   var tiempoQuieto = {};
   var distanciasCache = {};
@@ -783,6 +810,7 @@
     var base = (c.baseUrl || "").trim().replace(/\/+$/, "");
     if (!base) return Promise.reject(new Error("Falta la URL del servidor."));
     var op = { method: o.metodo || "GET", headers: obtenerCabeceras(c) };
+    op.headers["Accept"] = "application/json";
     if (o.cuerpo !== undefined) {
       op.headers["Content-Type"] = "application/json";
       op.body = JSON.stringify(o.cuerpo);
@@ -800,6 +828,10 @@
       if (r.status === 502) throw new Error("El proxy no alcanzó a Traccar (502). ¿Está corriendo el servidor?");
       if (!r.ok) throw new Error("La API respondió con estado " + r.status + ".");
       if (r.status === 204) return null;
+      var tipoContenido = r.headers.get("content-type") || "";
+      if (o.diagnostico && tipoContenido.indexOf("json") === -1) {
+        throw new Error("El servidor respondió " + tipoContenido.split(";")[0] + " en lugar de JSON.");
+      }
       return r.json().catch(function () { return null; });
     });
   }
@@ -1036,7 +1068,7 @@
     var desde = ultimaRevision || (Date.now() - 7 * 24 * 60 * 60 * 1000);
     var desdeIso = new Date(desde).toISOString();
     var params = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
-      "&from=" + encodeURIComponent(desdeIso) + "&to=" + encodeURIComponent(isoAhora());
+      "&type=allEvents&from=" + encodeURIComponent(desdeIso) + "&to=" + encodeURIComponent(isoAhora());
     return llamarApi("/reports/events?" + params, null, { timeoutMs: 30000 })
       .then(function (ev) {
         ultimaRevision = Date.now();
@@ -1045,7 +1077,13 @@
       var nuevos = [];
       if (primera) {
         arr.forEach(function (e) { idsVistos[e.id] = true; });
-        eventos = arr.slice(0, 40).map(enriquecerEvento);
+        var locales = eventos.filter(function (e) {
+          return typeof e.id === "string" && e.id.indexOf("local-") === 0;
+        });
+        eventos = locales.concat(arr.map(enriquecerEvento));
+        eventos.sort(function (a, b) { return new Date(b.hora || 0) - new Date(a.hora || 0); });
+        eventos = eventos.slice(0, 40);
+        renderAlarmas();
       } else {
         nuevos = arr.filter(function (e) {
           if (idsVistos[e.id]) return false;
@@ -1077,6 +1115,7 @@
     return {
       id: e.id,
       tipo: e.type || "desconocido",
+      detalle: e.attributes && e.attributes.alarm ? alarmaATexto(e.attributes.alarm) : "",
       vehiculo: vehiculoNombre(e.deviceId),
       geozona: geozonaNombre(e.geofenceId),
       hora: e.eventTime || e.serverTime || ""
@@ -1086,6 +1125,83 @@
   function esAlarmatipo(tipo) {
     return tipo === "alarm" || tipo === "sos" || (typeof tipo === "string" && tipo.indexOf("alarm") !== -1);
   }
+
+  var EVENTO_META = {
+    geofenceEnter: { t: "Entró a geozona", corto: "Entró a", c: "success", toast: true },
+    geofenceExit: { t: "Salió de geozona", corto: "Salió de", c: "warning", toast: true },
+    geofence: { t: "Geozona", corto: "Geozona", c: "info", toast: false },
+    alarm: { t: "Alarma", corto: "Alarma", c: "danger", toast: true },
+    sos: { t: "SOS", corto: "SOS", c: "danger", toast: true },
+    deviceMoving: { t: "En movimiento", corto: "En movimiento", c: "success", toast: false },
+    deviceStopped: { t: "Se detuvo", corto: "Detenido", c: "warning", toast: true },
+    deviceOnline: { t: "Conectado", corto: "Conectado", c: "success", toast: false },
+    deviceOffline: { t: "Sin conexión", corto: "Sin conexión", c: "danger", toast: true },
+    deviceUnknown: { t: "Sin señal", corto: "Sin señal", c: "neutral", toast: false },
+    command: { t: "Comando enviado", corto: "Comando", c: "info", toast: false },
+    commandResult: { t: "Comando ejecutado", corto: "Comando", c: "info", toast: false },
+    maintenance: { t: "Mantenimiento", corto: "Mantenimiento", c: "warning", toast: false },
+    media: { t: "Multimedia", corto: "Multimedia", c: "info", toast: false },
+    ignored: { t: "Evento ignorado", corto: "Ignorado", c: "neutral", toast: false },
+    expired: { t: "Expirado", corto: "Expirado", c: "neutral", toast: false }
+  };
+
+  var ALARMAS_TEXTO = {
+    sos: "SOS", powerCut: "Corte de energía", overspeed: "Exceso de velocidad",
+    geofence: "Geozona", idle: "Ralentí", crash: "Choque", jamming: "Interferencia",
+    tow: "Remolque", unauthorizedDriving: "Uso no autorizado", lowBattery: "Batería baja",
+    harshAcceleration: "Aceleración brusca", harshBraking: "Frenada brusca", harshCornering: "Curva brusca"
+  };
+
+  function alarmaATexto(alarma) {
+    var a = String(alarma || "");
+    if (!a) return "";
+    return ALARMAS_TEXTO[a] || a;
+  }
+
+  function metaEvento(tipo) {
+    if (tipo === "sos") return EVENTO_META.sos;
+    if (esAlarmatipo(tipo)) return EVENTO_META.alarm;
+    return EVENTO_META[tipo] || { t: tipo || "Evento", corto: tipo || "Evento", c: "info", toast: false };
+  }
+
+  function etiquetaEvento(tipo) { return metaEvento(tipo).t; }
+
+  function toastColorEvento(color) {
+    if (color === "danger") return "error";
+    if (color === "neutral") return "info";
+    return color;
+  }
+
+  function fraseEvento(e) {
+    var tipo = e.tipo || e.type;
+    var v = e.vehiculo || "";
+    var g = e.geozona || "una geozona";
+    var detalle = e.detalle || (e.attributes && alarmaATexto(e.attributes.alarm)) || "";
+    if (tipo === "sos" || (esAlarmatipo(tipo) && (!detalle || detalle === "SOS"))) {
+      return "¡SOS! Alarma de pánico desde " + v;
+    }
+    if (esAlarmatipo(tipo)) {
+      return "Alarma" + (detalle ? " (" + detalle + ")" : "") + " en " + v;
+    }
+    var frases = {
+      geofenceEnter: v + " entró a " + g,
+      geofenceExit: v + " salió de " + g,
+      geofence: v + " en " + g,
+      deviceMoving: v + " está en movimiento",
+      deviceStopped: v + " se detuvo",
+      deviceOnline: v + " volvió a conectarse",
+      deviceOffline: v + " perdió la conexión",
+      deviceUnknown: v + " está sin señal",
+      command: "Comando enviado a " + v,
+      commandResult: "Comando ejecutado en " + v,
+      maintenance: "Mantenimiento de " + v,
+      media: "Archivo multimedia de " + v,
+      ignored: v + ": evento ignorado",
+      expired: v + ": dispositivo expirado"
+    };
+    return frases[tipo] || (v ? v + ": " + etiquetaEvento(tipo) : etiquetaEvento(tipo));
+  }
+
 
   function agregarEventoSos(v) {
     var hora = v.hora && !isNaN(new Date(v.hora).getTime())
@@ -1100,6 +1216,7 @@
     var ev = {
       id: "sos-" + v.id + "-" + t,
       tipo: "alarm",
+      detalle: "SOS",
       vehiculo: v.nombre,
       geozona: "",
       hora: hora
@@ -1107,6 +1224,7 @@
     eventos.unshift(ev);
     eventos = eventos.slice(0, 40);
     idsVistos[ev.id] = true;
+    agregarAlHistorial(ev);
     mostrarToast("¡SOS! Alarma de pánico desde " + v.nombre, "error");
     renderAlarmas();
     guardarEventosLocal();
@@ -1175,6 +1293,7 @@
         eventos.unshift(ev);
         eventos = eventos.slice(0, 40);
         idsVistos[ev.id] = true;
+        agregarAlHistorial(ev);
         mostrarToast(
           v.nombre + (dentro ? " entró a " : " salió de ") + g.name,
           dentro ? "success" : "warning"
@@ -1220,22 +1339,10 @@
   }
 
   function eventoHTML(e) {
-    var mapaTipo = {
-      geofenceEnter: ["success", "Entró a"],
-      geofenceExit: ["warning", "Salió de"],
-      geofence: ["info", "Geozona"],
-      alarm: ["danger", "SOS"],
-      sos: ["danger", "SOS"]
-    };
-    var esSos = esAlarmatipo(e.tipo);
-    var mi = mapaTipo[e.tipo] || ["neutral", e.tipo];
-    var texto = esSos
-      ? "Alarma SOS · " + e.vehiculo
-      : e.vehiculo + " " + mi[1] + " " + (e.geozona || "una geozona");
-    var encabezado = esSos
-      ? '<span class="badge badge--danger">SOS</span>'
-      : '<span class="badge badge--' + mi[0] + '">' + mi[1] + '</span>';
-    return '<div class="evento' + (esSos ? " evento--alarma" : "") + '">' +
+    var meta = metaEvento(e.tipo);
+    var texto = fraseEvento(e);
+    var encabezado = '<span class="badge badge--' + meta.c + '">' + esc(meta.corto) + '</span>';
+    return '<div class="evento' + (esAlarmatipo(e.tipo) ? " evento--alarma" : "") + '">' +
       encabezado +
       '<span>' + esc(texto) + (e.hora ? ' · <span style="font-size:85%">' + desdeHace(e.hora) + '</span>' : '') + '</span>' +
       '<span class="evento__time" title="' + (e.hora ? esc(fechaHoraLocal(e.hora)) : "") + '">' + (e.hora ? fechaHoraLocal(e.hora) : "") + '</span>' +
@@ -1243,14 +1350,12 @@
   }
 
   function notificarEvento(e) {
-    var esSos = esAlarmatipo(e.type);
-    var tipo = { geofenceEnter: "success", geofenceExit: "warning", geofence: "info", alarm: "error", sos: "error" }[e.type] || "info";
-    var nombreV = vehiculoNombre(e.deviceId);
-    var nombreG = geozonaNombre(e.geofenceId);
-    var msg = esSos
-      ? "¡SOS! Alarma de pánico desde " + nombreV
-      : nombreV + (e.type === "geofenceEnter" ? " entró a " : " salió de ") + (nombreG || "una geozona");
-    mostrarToast(msg, tipo);
+    var meta = metaEvento(e.type);
+    if (meta.toast === false) return;
+    mostrarToast(
+      fraseEvento({ tipo: e.type, vehiculo: vehiculoNombre(e.deviceId), geozona: geozonaNombre(e.geofenceId), attributes: e.attributes }),
+      toastColorEvento(meta.c)
+    );
   }
 
   function actualizarTiempoQuieto() {
@@ -2309,27 +2414,50 @@
     if (tipo === "eventos") {
       var ids = vehiculos.map(function (v) { return v.id; });
       var params = ids.map(function (id) { return "deviceId=" + id; }).join("&") +
-        "&from=" + encodeURIComponent(desdeIso) + "&to=" + encodeURIComponent(hastaIso);
-      llamarApi("/reports/events?" + params).then(function (ev) {
-        var arr = Array.isArray(ev) ? ev : [];
+        "&type=allEvents&from=" + encodeURIComponent(desdeIso) + "&to=" + encodeURIComponent(hastaIso);
+      var dDesde = new Date(desdeIso).getTime();
+      var dHasta = new Date(hastaIso).getTime();
+      var localesRango = historialEventos.filter(function (e) {
+        var t = new Date(e.hora).getTime();
+        return t >= dDesde && t <= dHasta;
+      });
+      function mezclarLocales(arr) {
+        localesRango.forEach(function (e) {
+          var t = new Date(e.hora).getTime();
+          var dup = arr.some(function (x) {
+            var xt = new Date(x.eventTime || 0).getTime();
+            return x.type === e.tipo && vehiculoNombre(x.deviceId) === e.vehiculo && Math.abs(xt - t) < 180000;
+          });
+          if (!dup) arr.push({ id: e.id, type: e.tipo, eventTime: e.hora, _vehiculo: e.vehiculo, _geozona: e.geozona, _detalle: e.detalle });
+        });
+        return arr;
+      }
+      function pintarReporteEventos(arr) {
         arr.sort(function (a, b) {
           var da = typeof a.eventTime === "number" ? a.eventTime : new Date(String(a.eventTime || "").replace(" ", "T")).getTime();
           var db = typeof b.eventTime === "number" ? b.eventTime : new Date(String(b.eventTime || "").replace(" ", "T")).getTime();
           return (db || 0) - (da || 0);
         });
         if (!arr.length) {
-          resultado.innerHTML = '<p class="note">No hay eventos en ese rango de fechas.</p>';
-          return;
+          var avisoFiltro = config.deviceIds && config.deviceIds.length
+            ? ' Se consultaron solo los vehículos marcados en Configuración.'
+            : '';
+          return '<p class="note">No hay eventos en ese rango de fechas.' + avisoFiltro + '</p>';
         }
-        var tieneGeozonas = arr.some(function (e) { return e.type === "geofenceEnter" || e.type === "geofenceExit" || e.type === "geofence"; });
+        var tieneGeozonas = arr.some(function (e) {
+          return e.type === "geofenceEnter" || e.type === "geofenceExit" || e.type === "geofence" || e.geofenceId > 0;
+        });
         var html = '<h3 style="margin:0.5rem 0;font-size:1rem;">Eventos (' + arr.length + ')</h3>';
         html += '<table class="table-report"><thead><tr><th>Fecha/Hora</th><th>Vehículo</th><th>Tipo</th>' + (tieneGeozonas ? '<th>Geozona</th>' : '') + '</tr></thead><tbody>';
         arr.forEach(function (e) {
-          var nombreV = vehiculoNombre(e.deviceId);
-          var nombreG = geozonaNombre(e.geofenceId);
-          var tipoEtiqueta = { geofenceEnter: "Entró a geozona", geofenceExit: "Salió de geozona", geofence: "Geozona", alarm: "Alarma" }[e.type] || e.type;
-          var claseTipo = e.type === "alarm" ? ' style="color:var(--danger)"' : e.type === "geofenceEnter" ? ' style="color:var(--success)"' : e.type === "geofenceExit" ? ' style="color:var(--warning)"' : "";
-          html += '<tr><td>' + fechaHoraLocal(e.eventTime) + '</td><td>' + esc(nombreV) + '</td><td' + claseTipo + '>' + tipoEtiqueta + '</td>' + (tieneGeozonas ? '<td>' + esc(nombreG || "—") + '</td>' : '') + '</tr>';
+          var nombreV = e._vehiculo || vehiculoNombre(e.deviceId);
+          var nombreG = e._geozona || geozonaNombre(e.geofenceId);
+          var meta = metaEvento(e.type);
+          var detalle = e._detalle || (e.attributes && alarmaATexto(e.attributes.alarm)) || "";
+          var tipoEtiqueta = meta.t + (detalle && esAlarmatipo(e.type) ? " · " + detalle : "");
+          var claseTipo = (meta.c === "success" || meta.c === "warning" || meta.c === "danger" || meta.c === "info")
+            ? ' style="color:var(--' + meta.c + ')"' : "";
+          html += '<tr><td>' + fechaHoraLocal(e.eventTime) + '</td><td>' + esc(nombreV) + '</td><td' + claseTipo + '>' + esc(tipoEtiqueta) + '</td>' + (tieneGeozonas ? '<td>' + esc(nombreG || "—") + '</td>' : '') + '</tr>';
         });
         html += '</tbody></table>';
         var porTipo = {};
@@ -2337,13 +2465,21 @@
         html += '<h3 style="margin:1rem 0 0.5rem;font-size:1rem;">Resumen por tipo</h3>';
         html += '<table class="table-report"><thead><tr><th>Tipo</th><th>Cantidad</th></tr></thead><tbody>';
         Object.keys(porTipo).forEach(function (t) {
-          var label = { geofenceEnter: "Entró a geozona", geofenceExit: "Salió de geozona", geofence: "Geozona", alarm: "Alarma" }[t] || t;
-          html += '<tr><td>' + label + '</td><td>' + porTipo[t] + '</td></tr>';
+          html += '<tr><td>' + esc(etiquetaEvento(t)) + '</td><td>' + porTipo[t] + '</td></tr>';
         });
         html += '</tbody></table>';
-        resultado.innerHTML = html;
+        return html;
+      }
+      llamarApi("/reports/events?" + params, null, { diagnostico: true, timeoutMs: 30000 }).then(function (ev) {
+        var arr = Array.isArray(ev) ? ev : [];
+        resultado.innerHTML = pintarReporteEventos(mezclarLocales(arr));
       }).catch(function (err) {
-        resultado.innerHTML = '<p class="note">Error al cargar eventos: ' + esc(err.message || "desconocido") + '</p>';
+        if (localesRango.length) {
+          resultado.innerHTML = '<p class="note">Traccar no respondió (' + esc(err.message || "error") + '). Se muestran solo los eventos detectados localmente en el rango.</p>' +
+            pintarReporteEventos(mezclarLocales([]));
+        } else {
+          resultado.innerHTML = '<p class="note">Error al cargar eventos: ' + esc(err.message || "desconocido") + '</p>';
+        }
       });
       return;
     }
