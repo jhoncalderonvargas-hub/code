@@ -16,6 +16,8 @@
   --danger-light: #fee2e2;
   --info: #2563eb;
   --info-light: #dbeafe;
+  --azul-claro: #38bdf8;
+  --rojo-brillante: #ff2d2d;
   --neutral: #64748b;
   --neutral-light: #f1f5f9;
   --sidebar-bg: #0f172a;
@@ -1125,6 +1127,23 @@ a {
   z-index: 1000;
 }
 
+.map-wrap .leaflet-control-attribution {
+  background: rgba(148, 163, 184, 0.28) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(148, 163, 184, 0.55) !important;
+  font-size: 0.55rem !important;
+  line-height: 1 !important;
+  padding: 2px 6px !important;
+  border-radius: 6px 0 0 0;
+  border: none !important;
+}
+
+.map-wrap .leaflet-control-attribution a {
+  color: rgba(148, 163, 184, 0.55) !important;
+  text-decoration: none !important;
+}
+
 .playback-meta {
   display: flex;
   align-items: center;
@@ -1186,6 +1205,7 @@ a {
   font-size: var(--fs-sm);
   font-weight: 600;
   user-select: none;
+  box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.4);
 }
 
 .map-dark-toggle__label:hover {

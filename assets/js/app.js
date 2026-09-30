@@ -950,20 +950,43 @@
     return null;
   }
 
+  var vinculosCache = { firma: "", porGeozona: {}, ts: 0 };
+
+  function invalidarVinculos() { vinculosCache.ts = 0; }
+
+  function cargarVinculos(ids) {
+    var firma = ids.slice().sort(function (a, b) { return a - b; }).join(",");
+    var ahora = Date.now();
+    if (vinculosCache.firma === firma && ahora - vinculosCache.ts < 300000) {
+      return Promise.resolve(vinculosCache.porGeozona);
+    }
+    if (!ids.length) {
+      vinculosCache = { firma: "", porGeozona: {}, ts: ahora };
+      return Promise.resolve({});
+    }
+    return Promise.all(ids.map(function (id) {
+      return llamarApi("/geofences?deviceId=" + id).catch(function () { return []; });
+    })).then(function (listas) {
+      var porGeozona = {};
+      listas.forEach(function (lista, i) {
+        if (!Array.isArray(lista)) return;
+        lista.forEach(function (g) {
+          if (!g || g.id == null) return;
+          if (!porGeozona[g.id]) porGeozona[g.id] = [];
+          if (porGeozona[g.id].indexOf(ids[i]) === -1) porGeozona[g.id].push(ids[i]);
+        });
+      });
+      vinculosCache = { firma: firma, porGeozona: porGeozona, ts: ahora };
+      return porGeozona;
+    });
+  }
+
   function cargarGeozonas() {
-    return Promise.all([
-      llamarApi("/geofences"),
-      llamarApi("/permissions").catch(function () { return []; })
-    ])
+    var ids = vehiculos.map(function (v) { return v.id; });
+    return Promise.all([llamarApi("/geofences"), cargarVinculos(ids)])
       .then(function (res) {
         var arr = Array.isArray(res[0]) ? res[0] : [];
-        var perms = Array.isArray(res[1]) ? res[1] : [];
-        var porGeozona = {};
-        perms.forEach(function (p) {
-          if (!p.geofenceId) return;
-          if (!porGeozona[p.geofenceId]) porGeozona[p.geofenceId] = [];
-          if (p.deviceId != null) porGeozona[p.geofenceId].push(p.deviceId);
-        });
+        var porGeozona = res[1] || {};
         geozonas = arr.map(function (g) {
           g.dispositivos = porGeozona[g.id] || [];
           g._area = parsearGeozona(g.area);
@@ -1128,13 +1151,13 @@
   }
 
   var EVENTO_META = {
-    geofenceEnter: { t: "Entró a geozona", corto: "Entró a", c: "success", toast: true },
-    geofenceExit: { t: "Salió de geozona", corto: "Salió de", c: "warning", toast: true },
+    geofenceEnter: { t: "Entró a geozona", corto: "Entró a", c: "success", cr: "azul-claro", toast: true },
+    geofenceExit: { t: "Salió de geozona", corto: "Salió de", c: "warning", cr: "azul-claro", toast: true },
     geofence: { t: "Geozona", corto: "Geozona", c: "info", toast: false },
     alarm: { t: "Alarma", corto: "Alarma", c: "danger", toast: true },
     sos: { t: "SOS", corto: "SOS", c: "danger", toast: true },
     deviceMoving: { t: "En movimiento", corto: "En movimiento", c: "success", toast: false },
-    deviceStopped: { t: "Se detuvo", corto: "Detenido", c: "warning", toast: true },
+    deviceStopped: { t: "Se detuvo", corto: "Detenido", c: "warning", cr: "rojo-brillante", toast: true },
     deviceOnline: { t: "Conectado", corto: "Conectado", c: "success", toast: false, feed: false },
     deviceOffline: { t: "Sin conexión", corto: "Sin conexión", c: "danger", toast: true },
     deviceUnknown: { t: "Sin señal", corto: "Sin señal", c: "neutral", toast: false, feed: false },
@@ -1162,7 +1185,38 @@
   function metaEvento(tipo) {
     if (tipo === "sos") return EVENTO_META.sos;
     if (esAlarmatipo(tipo)) return EVENTO_META.alarm;
-    return EVENTO_META[tipo] || { t: tipo || "Evento", corto: tipo || "Evento", c: "info", toast: false };
+    if (EVENTO_META[tipo]) return EVENTO_META[tipo];
+    var legible = humanizarTipo(tipo);
+    return { t: legible, corto: legible, c: "info", toast: false };
+  }
+
+  function humanizarTipo(tipo) {
+    if (!tipo) return "Evento";
+    var mapa = {
+      driverChanged: "Cambio de conductor",
+      textMessage: "Mensaje de texto",
+      ignitionOn: "Encendido",
+      ignitionOff: "Apagado",
+      maintenanceRequested: "Mantenimiento solicitado",
+      deviceOverspeed: "Exceso de velocidad",
+      deviceMoving: "En movimiento",
+      deviceStopped: "Detenido",
+      deviceOnline: "Conectado",
+      deviceOffline: "Sin conexión",
+      deviceUnknown: "Sin señal",
+      commandResult: "Comando ejecutado",
+      command: "Comando enviado",
+      charging: "Cargando",
+      powerCut: "Corte de energía",
+      powerOn: "Energía restablecida",
+      geofenceEnter: "Entró a geozona",
+      geofenceExit: "Salió de geozona"
+    };
+    if (mapa[tipo]) return mapa[tipo];
+    return tipo
+      .replace(/([A-Z])/g, " $1")
+      .replace(/^./, function (s) { return s.toUpperCase(); })
+      .trim();
   }
 
   function etiquetaEvento(tipo) { return metaEvento(tipo).t; }
@@ -1178,7 +1232,7 @@
     var v = e.vehiculo || "";
     var g = e.geozona || "una geozona";
     var detalle = e.detalle || (e.attributes && alarmaATexto(e.attributes.alarm)) || "";
-    if (tipo === "sos" || (esAlarmatipo(tipo) && (!detalle || detalle === "SOS"))) {
+    if (tipo === "sos" || detalle === "SOS" || (e.id && String(e.id).indexOf("sos-") === 0)) {
       return "¡SOS! Alarma de pánico desde " + v;
     }
     if (esAlarmatipo(tipo)) {
@@ -1220,7 +1274,10 @@
       detalle: "SOS",
       vehiculo: v.nombre,
       geozona: "",
-      hora: hora
+      hora: hora,
+      lat: typeof v.lat === "number" ? v.lat : null,
+      lon: typeof v.lon === "number" ? v.lon : null,
+      direccion: v.direccion || ""
     };
     eventos.unshift(ev);
     eventos = eventos.slice(0, 40);
@@ -1503,6 +1560,7 @@
         }));
       })
       .then(function () {
+        invalidarVinculos();
         cerrarModalGeozona();
         mostrarToast("Geozona creada y asignada.", "success");
         refrescar();
@@ -2440,9 +2498,45 @@
             var xt = new Date(x.eventTime || 0).getTime();
             return x.type === e.tipo && vehiculoNombre(x.deviceId) === e.vehiculo && Math.abs(xt - t) < 180000;
           });
-          if (!dup) arr.push({ id: e.id, type: e.tipo, eventTime: e.hora, _vehiculo: e.vehiculo, _geozona: e.geozona, _detalle: e.detalle });
+          if (!dup) arr.push({ id: e.id, type: e.tipo, eventTime: e.hora, _vehiculo: e.vehiculo, _geozona: e.geozona, _detalle: e.detalle, _direccion: e.direccion || "", _lat: e.lat, _lon: e.lon });
         });
         return arr;
+      }
+      var posicionesPorId = {};
+      function cargarDireccionesEventos(arr) {
+        var ids = [];
+        var vistos = {};
+        arr.forEach(function (e) {
+          var sinGeozona = !e._geozona && !(e.geofenceId > 0 && geozonaNombre(e.geofenceId));
+          if (!sinGeozona) return;
+          var pid = e.positionId || (e.attributes && e.attributes.positionId) || 0;
+          if (pid > 0 && !vistos[pid]) { vistos[pid] = true; ids.push(pid); }
+        });
+        if (!ids.length) return Promise.resolve();
+        var trozos = [];
+        for (var i = 0; i < ids.length; i += 50) trozos.push(ids.slice(i, i + 50));
+        return Promise.all(trozos.map(function (t) {
+          var q = t.map(function (id) { return "id=" + id; }).join("&");
+          return llamarApi("/positions?" + q, null, { timeoutMs: 20000 }).then(function (ps) {
+            if (!Array.isArray(ps)) return;
+            ps.forEach(function (p) { posicionesPorId[p.id] = p; });
+          }).catch(function () {});
+        }));
+      }
+      function direccionDeEvento(e) {
+        if (e._direccion) return e._direccion;
+        var pid = e.positionId || (e.attributes && e.attributes.positionId) || 0;
+        var p = posicionesPorId[pid];
+        if (p) {
+          if (p.address) return p.address;
+          if (typeof p.latitude === "number" && typeof p.longitude === "number") {
+            return p.latitude.toFixed(6) + ", " + p.longitude.toFixed(6);
+          }
+        }
+        if (typeof e._lat === "number" && typeof e._lon === "number") {
+          return e._lat.toFixed(6) + ", " + e._lon.toFixed(6);
+        }
+        return "";
       }
       function pintarReporteEventos(arr) {
         arr.sort(function (a, b) {
@@ -2456,20 +2550,21 @@
             : '';
           return '<p class="note">No hay eventos en ese rango de fechas.' + avisoFiltro + '</p>';
         }
-        var tieneGeozonas = arr.some(function (e) {
-          return e.type === "geofenceEnter" || e.type === "geofenceExit" || e.type === "geofence" || e.geofenceId > 0;
+        var tieneUbicacion = arr.some(function (e) {
+          return e.type === "geofenceEnter" || e.type === "geofenceExit" || e.type === "geofence" || e.geofenceId > 0 || direccionDeEvento(e);
         });
         var html = '<h3 style="margin:0.5rem 0;font-size:1rem;">Eventos (' + arr.length + ')</h3>';
-        html += '<table class="table-report"><thead><tr><th>Fecha/Hora</th><th>Vehículo</th><th>Tipo</th>' + (tieneGeozonas ? '<th>Geozona</th>' : '') + '</tr></thead><tbody>';
+        html += '<table class="table-report"><thead><tr><th>Fecha/Hora</th><th>Vehículo</th><th>Tipo</th>' + (tieneUbicacion ? '<th>Geozona / Ubicación</th>' : '') + '</tr></thead><tbody>';
         arr.forEach(function (e) {
           var nombreV = e._vehiculo || vehiculoNombre(e.deviceId);
           var nombreG = e._geozona || geozonaNombre(e.geofenceId);
+          if (!nombreG) nombreG = direccionDeEvento(e);
           var meta = metaEvento(e.type);
           var detalle = e._detalle || (e.attributes && alarmaATexto(e.attributes.alarm)) || "";
           var tipoEtiqueta = meta.t + (detalle && esAlarmatipo(e.type) ? " · " + detalle : "");
-          var claseTipo = (meta.c === "success" || meta.c === "warning" || meta.c === "danger" || meta.c === "info")
-            ? ' style="color:var(--' + meta.c + ')"' : "";
-          html += '<tr><td>' + fechaHoraLocal(e.eventTime) + '</td><td>' + esc(nombreV) + '</td><td' + claseTipo + '>' + esc(tipoEtiqueta) + '</td>' + (tieneGeozonas ? '<td>' + esc(nombreG || "—") + '</td>' : '') + '</tr>';
+          var colorTipo = meta.cr || meta.c;
+          var claseTipo = ' style="color:var(--' + colorTipo + ')"';
+          html += '<tr><td>' + fechaHoraLocal(e.eventTime) + '</td><td>' + esc(nombreV) + '</td><td' + claseTipo + '>' + esc(tipoEtiqueta) + '</td>' + (tieneUbicacion ? '<td>' + esc(nombreG || "—") + '</td>' : '') + '</tr>';
         });
         html += '</tbody></table>';
         var porTipo = {};
@@ -2484,7 +2579,11 @@
       }
       llamarApi("/reports/events?" + params, null, { diagnostico: true, timeoutMs: 30000 }).then(function (ev) {
         var arr = Array.isArray(ev) ? ev : [];
-        resultado.innerHTML = pintarReporteEventos(mezclarLocales(arr));
+        arr = mezclarLocales(arr);
+        resultado.innerHTML = '<p class="note">Consultando ubicaciones…</p>';
+        return cargarDireccionesEventos(arr).then(function () {
+          resultado.innerHTML = pintarReporteEventos(arr);
+        });
       }).catch(function (err) {
         if (localesRango.length) {
           resultado.innerHTML = '<p class="note">Traccar no respondió (' + esc(err.message || "error") + '). Se muestran solo los eventos detectados localmente en el rango.</p>' +
@@ -2705,35 +2804,6 @@
       }
       resultado.innerHTML = html || '<p class="note">No hay datos para mostrar.</p>';
     });
-  }
-
-  function exportarCSV() {
-    var contenedor = document.querySelector("#reporte-resultado");
-    if (!contenedor || !contenedor.querySelector("table")) { mostrarToast("Primero generá un reporte.", "error"); return; }
-    var tablas = contenedor.querySelectorAll("table");
-    var csv = "";
-    tablas.forEach(function (tabla, idx) {
-      var titulo = tabla.previousElementSibling;
-      if (titulo && titulo.tagName.match(/^H[2-6]$/)) {
-        csv += "\n" + titulo.textContent + "\n";
-      } else if (idx > 0) {
-        csv += "\n\n";
-      }
-      var filas = tabla.querySelectorAll("tr");
-      filas.forEach(function (fila) {
-        var celdas = fila.querySelectorAll("th, td");
-        var cols = [];
-        celdas.forEach(function (c) { cols.push('"' + c.textContent.replace(/"/g, '""') + '"'); });
-        csv += cols.join(";") + "\n";
-      });
-    });
-    var blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    var link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "reporte_flota_" + new Date().toISOString().slice(0, 10) + ".csv";
-    link.click();
-    URL.revokeObjectURL(link.href);
-    mostrarToast("CSV exportado.", "success");
   }
 
   function exportarPDF() {
@@ -3751,7 +3821,6 @@
     });
 
     $("#btn-generar-reporte").addEventListener("click", generarReporte);
-    $("#btn-exportar-csv").addEventListener("click", exportarCSV);
     $("#btn-exportar-pdf").addEventListener("click", exportarPDF);
     $("#rep-rango").addEventListener("change", function () {
       var ahora = new Date();
