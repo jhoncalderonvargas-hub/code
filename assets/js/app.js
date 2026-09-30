@@ -479,6 +479,7 @@
   var rutaHistorial = null;
   var vehiculos = [];
   var marcadores = {};
+  var estadoMarcador = {};
   var mapa = null;
   var temporizador = null;
   var refrescando = false;
@@ -499,6 +500,11 @@
     if (renderCache[clave] === firma) return true;
     renderCache[clave] = firma;
     return false;
+  }
+
+  var cacheReferencias = new Map();
+  function limpiarCacheReferencias() {
+    cacheReferencias.clear();
   }
 
   var vehiculosIndice = new Map();
@@ -671,6 +677,7 @@
   }
 
   function guardarPois() {
+    limpiarCacheReferencias();
     try {
       localStorage.setItem(CLAVE_POIS, JSON.stringify(pois));
     } catch (e) {}
@@ -1828,10 +1835,12 @@
   }
 
   function guardarHospitalesCustom(datos) {
+    limpiarCacheReferencias();
     localStorage.setItem(CLAVE_HOSPITALES_CUSTOM, JSON.stringify(datos));
   }
 
   function aplicarHospitalesCustom() {
+    limpiarCacheReferencias();
     var custom = cargarHospitalesCustom();
     Object.keys(custom).forEach(function (id) {
       var h = null;
@@ -2271,6 +2280,8 @@
     pbMarcadoresFin = [];
   }
 
+  var UMBRAL_FUSION_MIN = 2;
+
   var pbIndex = 0;
   var pbIntervalo = null;
   var pbMarcador = null;
@@ -2315,6 +2326,47 @@
     return llamarApi(q, null, { timeoutMs: 60000 });
   }
 
+  function clonarViaje(v) {
+    var c = {};
+    for (var k in v) if (Object.prototype.hasOwnProperty.call(v, k)) c[k] = v[k];
+    c.puntos = (v.puntos || []).slice();
+    return c;
+  }
+
+  function fusionarViajes(viajes, minutos) {
+    if (!viajes || !viajes.length) return viajes || [];
+    var tope = (minutos == null ? UMBRAL_FUSION_MIN : minutos) * 60000;
+    var ordenados = viajes.slice().sort(function (a, b) {
+      return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+    });
+    var salida = [];
+    ordenados.forEach(function (v) {
+      var actual = salida[salida.length - 1];
+      if (!actual) {
+        salida.push(clonarViaje(v));
+        return;
+      }
+      var finActual = new Date(actual.endTime).getTime();
+      var iniSiguiente = new Date(v.startTime).getTime();
+      var hueco = iniSiguiente - finActual;
+      if (!isFinite(hueco) || !isFinite(tope) || hueco > tope) {
+        salida.push(clonarViaje(v));
+        return;
+      }
+      actual.endTime = v.endTime;
+      if (v.endLat != null) {
+        actual.endLat = v.endLat;
+        actual.endLon = v.endLon;
+      }
+      actual.distance = (actual.distance || 0) + (v.distance || 0);
+      if ((v.maxSpeed || 0) > (actual.maxSpeed || 0)) actual.maxSpeed = v.maxSpeed;
+      actual.puntos = (actual.puntos || []).concat(v.puntos || []);
+      var durMs = new Date(actual.endTime).getTime() - new Date(actual.startTime).getTime();
+      if (durMs > 0 && actual.distance) actual.averageSpeed = (actual.distance / durMs) * 1.94384;
+    });
+    return salida;
+  }
+
   function cargarHistorial() {
     var id = parseInt($("#hist-vehiculo").value, 10);
     var desde = $("#hist-desde").value;
@@ -2350,19 +2402,36 @@
       reporteRutaTraccar(id, desdeIso, hastaIso)
     ]).then(function (res) {
       var tripsApi = Array.isArray(res[0]) ? res[0] : [];
-      var ruta = Array.isArray(res[1]) ? res[1] : [];
-      ruta.sort(function (a, b) { return new Date(a.fixTime) - new Date(b.fixTime); });
+      var rutaCruda = Array.isArray(res[1]) ? res[1] : [];
+      var pares = rutaCruda.map(function (p) {
+        return { p: p, t: new Date(p.fixTime).getTime() };
+      });
+      pares.sort(function (a, b) { return a.t - b.t; });
+      var ruta = new Array(pares.length);
+      var rutaT = new Array(pares.length);
+      for (var rp = 0; rp < pares.length; rp++) {
+        ruta[rp] = pares[rp].p;
+        rutaT[rp] = pares[rp].t;
+      }
       if (!tripsApi.length && !ruta.length) {
         info.textContent = "No hay viajes en ese rango de tiempo.";
         return;
       }
-      var viajes = tripsApi.map(function (t) {
+      var viajesOrdenados = tripsApi.slice().sort(function (a, b) {
+        return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+      });
+      var cursorIni = 0;
+      var cursorFin = 0;
+      var viajes = viajesOrdenados.map(function (t) {
         var ini = new Date(t.startTime).getTime();
         var fin = new Date(t.endTime).getTime();
-        var puntos = ruta.filter(function (p) {
-          var ft = new Date(p.fixTime).getTime();
-          return ft >= ini && ft <= fin;
-        });
+        var puntos = [];
+        if (isFinite(ini) && isFinite(fin) && fin >= ini) {
+          while (cursorIni < rutaT.length && rutaT[cursorIni] < ini) cursorIni++;
+          if (cursorFin < cursorIni) cursorFin = cursorIni;
+          while (cursorFin < rutaT.length && rutaT[cursorFin] <= fin) cursorFin++;
+          if (cursorFin > cursorIni) puntos = ruta.slice(cursorIni, cursorFin);
+        }
         if (!puntos.length && t.startLat != null && t.endLat != null) {
           puntos = [
             { latitude: t.startLat, longitude: t.startLon, fixTime: t.startTime, speed: 0 },
@@ -2370,9 +2439,9 @@
           ];
         }
         var maxKnots = 0;
-        puntos.forEach(function (p) {
-          if (p.speed && p.speed > maxKnots) maxKnots = p.speed;
-        });
+        for (var pk = 0; pk < puntos.length; pk++) {
+          if (puntos[pk].speed && puntos[pk].speed > maxKnots) maxKnots = puntos[pk].speed;
+        }
         if (!maxKnots && typeof t.maxSpeed === "number") maxKnots = t.maxSpeed;
         return {
           startTime: t.startTime,
@@ -2393,7 +2462,9 @@
           kmTodo += distanciaKm(ruta[k - 1].latitude, ruta[k - 1].longitude, ruta[k].latitude, ruta[k].longitude);
         }
         var maxKn = 0;
-        ruta.forEach(function (p) { if (p.speed && p.speed > maxKn) maxKn = p.speed; });
+        for (var mk = 0; mk < ruta.length; mk++) {
+          if (ruta[mk].speed && ruta[mk].speed > maxKn) maxKn = ruta[mk].speed;
+        }
         viajes = [{
           startTime: ruta[0].fixTime,
           endTime: ruta[ruta.length - 1].fixTime,
@@ -2410,6 +2481,7 @@
         info.textContent = "No hay viajes en ese rango de tiempo.";
         return;
       }
+      viajes = fusionarViajes(viajes, UMBRAL_FUSION_MIN);
       var colores = ["#2563eb", "#16a34a", "#d97706", "#dc2626", "#7c3aed", "#0891b2"];
       pbDetalles = [];
       viajes.forEach(function (viaje, idx) {
@@ -2461,7 +2533,7 @@
           duracionMin += (new Date(v.endTime) - new Date(v.startTime)) / 60000;
         }
       });
-      info.innerHTML = "<strong>" + viajes.length + " viajes (Traccar)</strong> · " + (kmTotal / 1000).toFixed(1) + " km · " + Math.round(duracionMin) + " min totales";
+      info.innerHTML = "<strong>" + viajes.length + " viajes (unidos con pausas de " + UMBRAL_FUSION_MIN + " min o menos)</strong> · " + (kmTotal / 1000).toFixed(1) + " km · " + Math.round(duracionMin) + " min totales";
       pbIndex = 0;
       $("#hist-controles").style.display = "";
       $("#pb-slider").max = viajes.length - 1;
@@ -3253,6 +3325,7 @@
     vehiculos.forEach(function (v) {
       if (!v.tienePosicion) return;
       visibles[v.id] = true;
+      var texto = tituloPopup(v);
       if (!marcadores[v.id]) {
         var iconoVehiculo = L.divIcon({
           className: "poi-marker",
@@ -3261,17 +3334,33 @@
           iconAnchor: [12, 12]
         });
         marcadores[v.id] = L.marker([v.lat, v.lon], { icon: iconoVehiculo });
-        marcadores[v.id].bindPopup(tituloPopup(v));
+        marcadores[v.id].bindPopup(texto);
         marcadores[v.id].addTo(mapa);
+        estadoMarcador[v.id] = { lat: v.lat, lon: v.lon, texto: texto };
       } else {
-        marcadores[v.id].setLatLng([v.lat, v.lon]);
-        marcadores[v.id].getPopup().setContent(tituloPopup(v));
+        var previo = estadoMarcador[v.id];
+        if (!previo) {
+          marcadores[v.id].setLatLng([v.lat, v.lon]);
+          marcadores[v.id].getPopup().setContent(texto);
+          estadoMarcador[v.id] = { lat: v.lat, lon: v.lon, texto: texto };
+        } else {
+          if (previo.lat !== v.lat || previo.lon !== v.lon) {
+            marcadores[v.id].setLatLng([v.lat, v.lon]);
+          }
+          if (previo.texto !== texto) {
+            marcadores[v.id].getPopup().setContent(texto);
+          }
+          previo.lat = v.lat;
+          previo.lon = v.lon;
+          previo.texto = texto;
+        }
       }
     });
     Object.keys(marcadores).forEach(function (id) {
       if (!visibles[id]) {
         mapa.removeLayer(marcadores[id]);
         delete marcadores[id];
+        delete estadoMarcador[id];
       }
     });
   }
@@ -3408,6 +3497,11 @@
     return fecha + ' ' + hora;
   }
 
+  var GRAD_A_RAD = Math.PI / 180;
+  var RAD_A_GRAD = 180 / Math.PI;
+  var TIERRA_RAD = 6371;
+  var KM_POR_GRAD = TIERRA_RAD * GRAD_A_RAD;
+
   function distanciaKm(lat1, lon1, lat2, lon2) {
     var R = 6371;
     var dLat = (lat2 - lat1) * Math.PI / 180;
@@ -3419,11 +3513,33 @@
     return R * c;
   }
 
+  // Caja envolvente exacta a partir de Haversine, para descartar candidatos
+  // lejanos con comparaciones simples (sin trigonometria por referencia).
+  function cajaEnvolvente(lat, lon, radioKm) {
+    var margenLat = radioKm / KM_POR_GRAD;
+    var latMin = lat - margenLat;
+    var latMax = lat + margenLat;
+    var latAbsMax = Math.max(Math.abs(latMin), Math.abs(latMax));
+    if (latAbsMax > 89.9) latAbsMax = 89.9;
+    var limiteCos = Math.cos(latAbsMax * GRAD_A_RAD);
+    var sinMax = Math.sin(radioKm / (2 * TIERRA_RAD));
+    var sinLon = sinMax / limiteCos;
+    var margenLon = sinLon >= 1 ? 180 : Math.asin(sinLon) * 2 * RAD_A_GRAD;
+    return { latMin: latMin, latMax: latMax, lonMin: lon - margenLon, lonMax: lon + margenLon };
+  }
+
   function buscarReferenciasCercanas(lat, lon, radioKm) {
+    var clave = Math.round(lat * 1000) + "|" + Math.round(lon * 1000) + "|" + radioKm;
+    var guardado = cacheReferencias.get(clave);
+    if (guardado) return guardado;
+
+    var caja = cajaEnvolvente(lat, lon, radioKm);
     var referencias = [];
-    var i, d, item;
+    var i, item, d;
     for (i = 0; i < hospitales.length; i++) {
       item = hospitales[i];
+      if (item.lat < caja.latMin || item.lat > caja.latMax ||
+          item.lon < caja.lonMin || item.lon > caja.lonMax) continue;
       d = distanciaKm(lat, lon, item.lat, item.lon);
       if (d <= radioKm) {
         referencias.push({ tipo: "hospital", nombre: item.nombre, distancia: d });
@@ -3431,12 +3547,16 @@
     }
     for (i = 0; i < pois.length; i++) {
       item = pois[i];
+      if (item.lat < caja.latMin || item.lat > caja.latMax ||
+          item.lon < caja.lonMin || item.lon > caja.lonMax) continue;
       d = distanciaKm(lat, lon, item.lat, item.lon);
       if (d <= radioKm) {
         referencias.push({ tipo: "poi", nombre: item.nombre, distancia: d });
       }
     }
     referencias.sort(function (a, b) { return a.distancia - b.distancia; });
+    if (cacheReferencias.size >= 4000) cacheReferencias.clear();
+    cacheReferencias.set(clave, referencias);
     return referencias;
   }
 
