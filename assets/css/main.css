@@ -682,6 +682,10 @@ a {
   padding-top: var(--sp-3);
 }
 
+.vehicle__actions span:empty {
+  display: none;
+}
+
 .vehicle__actions .button {
   padding: var(--sp-1) var(--sp-2);
   font-size: var(--fs-xs);
@@ -945,6 +949,10 @@ a {
   border-radius: var(--radius-sm);
   font-size: var(--fs-sm);
   overflow: hidden;
+}
+
+.vehicle__refs:empty {
+  display: none;
 }
 
 .vehicle__refs-title {

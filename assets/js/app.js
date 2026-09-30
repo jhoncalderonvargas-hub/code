@@ -462,7 +462,6 @@
 
   var hospitalesLayers = {};
   var coberturaLayers = {};
-  var coberturaVisible = false;
   var radioCobertura = 5000;
   var CLAVE_HOSPITALES_VISIBLE = "flota_hospitales_visible";
   var CLAVE_RADIO_COBERTURA = "flota_radio_cobertura";
@@ -494,6 +493,20 @@
   var historialEventos = [];
   var ultimaRevision = 0;
   var DOS_HORAS = 2 * 60 * 60 * 1000;
+
+  var renderCache = {};
+  function sinCambios(clave, firma) {
+    if (renderCache[clave] === firma) return true;
+    renderCache[clave] = firma;
+    return false;
+  }
+
+  var vehiculosIndice = new Map();
+  function asignarVehiculos(arr) {
+    vehiculos = arr;
+    vehiculosIndice.clear();
+    for (var i = 0; i < arr.length; i++) vehiculosIndice.set(arr[i].id, arr[i]);
+  }
 
   function cargarEventosLocal() {
     try {
@@ -562,6 +575,8 @@
   var $ = function (s) { return document.querySelector(s); };
 
   var lista = $("#vehiculos");
+  var tarjetaNodos = new Map();
+  var listaVaciaActual = null;
   var elConexion = $("#conexion");
   var elConexionTexto = $("#conexion-texto");
   var modal = $("#modal");
@@ -613,14 +628,37 @@
   function cargarVelocidades() {
     try {
       var guardado = localStorage.getItem(CLAVE_VELOCIDADES);
-      if (guardado) return JSON.parse(guardado) || {};
+      if (guardado) {
+        var datos = JSON.parse(guardado) || {};
+        Object.keys(datos).forEach(function (k) {
+          var h = datos[k];
+          if (!h || typeof h !== "object") { delete datos[k]; return; }
+          if (typeof h.max !== "number") h.max = 0;
+          if (typeof h.inicio !== "string") h.inicio = new Date().toDateString();
+          if (typeof h.tiempo !== "number" || typeof h.suma !== "number" || h.tiempo < 0 || h.suma < 0) {
+            h.suma = 0;
+            h.tiempo = 0;
+          }
+          if (typeof h.ultima !== "number" || h.ultima < 0) h.ultima = 0;
+          delete h.cuenta;
+        });
+        return datos;
+      }
     } catch (e) {}
     return {};
   }
 
+  var velocidadesSucias = false;
+  var ultimaGuardadoVelocidades = 0;
+
   function guardarVelocidades() {
+    if (!velocidadesSucias) return;
+    var ahora = Date.now();
+    if (ahora - ultimaGuardadoVelocidades < 30000) return;
+    ultimaGuardadoVelocidades = ahora;
     try {
       localStorage.setItem(CLAVE_VELOCIDADES, JSON.stringify(historialVelocidades));
+      velocidadesSucias = false;
     } catch (e) {}
   }
 
@@ -638,27 +676,32 @@
     } catch (e) {}
   }
 
+  var MUESTRA_TOPE_MS = 60000;
+
   function registrarVelocidad(id, velocidad) {
-    if (!historialVelocidades[id]) {
-      historialVelocidades[id] = { max: 0, suma: 0, cuenta: 0, inicio: new Date().toDateString() };
-    }
-    var h = historialVelocidades[id];
+    var ahora = Date.now();
     var hoy = new Date().toDateString();
-    if (h.inicio !== hoy) {
-      h.max = 0;
-      h.suma = 0;
-      h.cuenta = 0;
-      h.inicio = hoy;
+    var h = historialVelocidades[id];
+    if (!h || h.inicio !== hoy) {
+      h = historialVelocidades[id] = { max: 0, suma: 0, tiempo: 0, ultima: 0, inicio: hoy };
     }
     if (velocidad > h.max) h.max = velocidad;
-    h.suma += velocidad;
-    h.cuenta++;
+    if (h.ultima > 0) {
+      var dt = Math.min(ahora - h.ultima, MUESTRA_TOPE_MS);
+      if (dt > 0) {
+        h.suma += velocidad * dt;
+        h.tiempo += dt;
+      }
+    }
+    h.ultima = ahora;
+    velocidadesSucias = true;
   }
 
   function estadisticasVelocidad(id) {
     var h = historialVelocidades[id];
-    if (!h || h.cuenta === 0) return { max: 0, promedio: 0 };
-    return { max: h.max, promedio: Math.round(h.suma / h.cuenta) };
+    if (!h) return { max: 0, promedio: 0 };
+    if (!h.tiempo) return { max: h.max || 0, promedio: 0 };
+    return { max: h.max, promedio: Math.round(h.suma / h.tiempo) };
   }
 
   function consumoVehiculo(id) {
@@ -793,7 +836,7 @@
     config = Object.assign({}, config, { user: "", password: "", token: "", authType: "basic" });
     guardarConfig(config);
     cerrarSesionLocal();
-    vehiculos = [];
+    asignarVehiculos([]);
     mostrarLogin();
     estadoConexion("wait", "Sesión cerrada");
   }
@@ -854,9 +897,9 @@
         var porId = {};
         posiciones.forEach(function (p) { porId[p.deviceId] = p; });
 
-        vehiculos = seleccion.map(function (d) {
+        asignarVehiculos(seleccion.map(function (d) {
           return enriquecer(d, porId[d.id], distanciasCache[d.id] || null);
-        });
+        }));
         return Promise.allSettled([cargarGeozonas(), cargarEventos()]);
       }).then(function () {
         detectarCrucesGeozona();
@@ -1027,10 +1070,20 @@
 
   var ultimaVista = "";
 
+  function firmaGeozonas() {
+    return geozonas.map(function (g) {
+      return g.id + "~" + g.name + "~" + (g.description || "") + "~" +
+        (g._area ? JSON.stringify(g._area) : "") + "~" + (g.dispositivos || []).join(",");
+    }).join("|");
+  }
+
   function dibujarGeozonas() {
     if (typeof L === "undefined" || !mapa) return;
     var COLOR = "#8b5cf6";
     var vistos = {};
+    var conArea = 0;
+    geozonas.forEach(function (g) { if (g._area) conArea++; });
+    if (Object.keys(geozonaLayers).length === conArea && sinCambios("geozonaLayers", firmaGeozonas())) return;
     geozonas.forEach(function (g) {
       if (!g._area) return;
       vistos[g.id] = true;
@@ -1059,10 +1112,12 @@
 
   function renderGeozonas() {
     var contenedor = $("#geozonas");
+    if (!contenedor) return;
     if (!geozonas.length) {
       contenedor.innerHTML = '<div class="vacio"><p><strong>No hay geozonas.</strong></p><p class="note" style="margin-top:0.25rem;">Crea una con el botón "Nueva geozona" para vigilar las entradas y salidas de los vehículos.</p></div>';
       return;
     }
+    if (sinCambios("geozonas", firmaGeozonas())) return;
     contenedor.innerHTML = geozonas.map(geozonaHTML).join("");
   }
 
@@ -1098,33 +1153,33 @@
         ultimaRevision = Date.now();
         var arr = Array.isArray(ev) ? ev : [];
         arr.sort(function (a, b) { return new Date(b.eventTime || b.serverTime || 0) - new Date(a.eventTime || a.serverTime || 0); });
-      var nuevos = [];
-      if (primera) {
-        arr.forEach(function (e) { idsVistos[e.id] = true; });
-        var locales = eventos.filter(function (e) {
-          return typeof e.id === "string" && e.id.indexOf("local-") === 0;
-        });
-        eventos = locales.concat(arr.map(enriquecerEvento));
+        if (primera) {
+          arr.forEach(function (e) { idsVistos[e.id] = true; });
+          var locales = eventos.filter(function (e) {
+            return typeof e.id === "string" && e.id.indexOf("local-") === 0;
+          });
+          eventos = locales.concat(arr.map(enriquecerEvento));
+        } else {
+          var idsActuales = new Set();
+          for (var i = 0; i < eventos.length; i++) idsActuales.add(eventos[i].id);
+          var nuevos = [];
+          for (var j = 0; j < arr.length; j++) {
+            if (idsVistos[arr[j].id]) continue;
+            idsVistos[arr[j].id] = true;
+            if (nuevos.length < 3) nuevos.push(arr[j]);
+          }
+          nuevos.forEach(notificarEvento);
+          var nuevosEnriquecidos = arr.filter(function (e) { return !idsActuales.has(e.id); }).map(enriquecerEvento);
+          eventos = nuevosEnriquecidos.concat(eventos);
+        }
         eventos.sort(function (a, b) { return new Date(b.hora || 0) - new Date(a.hora || 0); });
         eventos = eventos.slice(0, 40);
-        renderAlarmas();
-      } else {
-        nuevos = arr.filter(function (e) {
-          if (idsVistos[e.id]) return false;
-          idsVistos[e.id] = true;
-          return true;
-        }).slice(0, 3);
-        nuevos.forEach(notificarEvento);
-        var nuevosEnriquecidos = arr.filter(function (e) { return !eventos.some(function (ex) { return ex.id === e.id; }); }).map(enriquecerEvento);
-        eventos = nuevosEnriquecidos.concat(eventos).slice(0, 40);
-        renderAlarmas();
-      }
-      var claves = Object.keys(idsVistos);
-      if (claves.length > 200) {
-        claves.slice(0, claves.length - 200).forEach(function (k) { delete idsVistos[k]; });
-      }
-      guardarEventosLocal();
-      return true;
+        var claves = Object.keys(idsVistos);
+        if (claves.length > 200) {
+          claves.slice(0, claves.length - 200).forEach(function (k) { delete idsVistos[k]; });
+        }
+        guardarEventosLocal();
+        return true;
       })
       .catch(function () {
         if (!cargarEventos._avisado) {
@@ -1385,9 +1440,13 @@
   function renderAlarmas() {
     var contenedor = $("#alarmas");
     var total = $("#alarmas-num");
+    if (!contenedor || !total) return;
     var dosHorasAtras = Date.now() - 2 * 60 * 60 * 1000;
     eventos = eventos.filter(function (e) { return new Date(e.hora).getTime() > dosHorasAtras; });
     var visibles = eventos.filter(function (e) { return metaEvento(e.tipo).feed !== false; });
+    var ultimo = visibles[0];
+    var firma = Math.floor(Date.now() / 60000) + "|" + visibles.length + "|" + (ultimo ? ultimo.id + ultimo.hora : "");
+    if (sinCambios("alarmas", firma)) return;
     if (!visibles.length) {
       contenedor.innerHTML = '<div class="vacio"><p><strong>Sin alarmas registradas.</strong></p><p class="note" style="margin-top:0.25rem;">Alarmas SOS, entradas y salidas de geozonas, detenidos y desconexiones de los dispositivos aparecerán aquí en tiempo real.</p></div>';
       total.textContent = "0";
@@ -1842,12 +1901,15 @@
     cerrarModalHospital();
     renderHospitales();
     mostrarToast("Hospital actualizado.", "success");
-    if (capasVisibles.hospitales) { dibujarHospitales(); }
+    dibujarHospitales();
   }
 
   function dibujarPois() {
     if (typeof L === "undefined" || !mapa) return;
     var vistos = {};
+    var firma = JSON.stringify(pois) + "#" + firmaHospitales();
+    var sinCambiosPois = sinCambios("poiLayers", firma);
+    if (sinCambiosPois && Object.keys(poiLayers).length === pois.length) return;
     pois.forEach(function (p) {
       vistos[p.id] = true;
       var icon = L.divIcon({ className: "poi-marker", html: '<span class="poi-icon">' + (iconosPoi[p.tipo] || "📍") + '</span>', iconSize: [24, 24], iconAnchor: [12, 12] });
@@ -1877,12 +1939,20 @@
     return mejor ? { nombre: mejor.nombre, distancia: menor } : null;
   }
 
+  function firmaHospitales() {
+    return hospitales.map(function (h) {
+      return h.id + "~" + h.nombre + "~" + h.tipo + "~" + h.lat + "~" + h.lon + "~" + h.direccion + "~" + h.telefono + "~" + h.camas + "~" + (h.especialidades || []).join(",");
+    }).join("|");
+  }
+
   function renderPois() {
     var contenedor = $("#pois");
+    if (!contenedor) return;
     if (!pois.length) {
       contenedor.innerHTML = '<div class="vacio"><p><strong>No hay puntos de interés.</strong></p><p class="note">Creá uno con el botón de arriba.</p></div>';
       return;
     }
+    if (sinCambios("pois", JSON.stringify(pois) + "#" + firmaHospitales())) return;
     contenedor.innerHTML = pois.map(function (p) {
       var cercano = hospitalCercano(p.lat, p.lon);
       var infoExtra = cercano
@@ -1900,7 +1970,9 @@
   }
 
   function dibujarHospitales() {
-    if (typeof L === "undefined" || !mapa) return;
+    if (typeof L === "undefined" || !mapa || !capasVisibles.hospitales) return;
+    var firma = firmaHospitales();
+    if (Object.keys(hospitalesLayers).length === hospitales.length && sinCambios("hospitalesLayers", firma)) return;
     var iconHospital = L.divIcon({
       className: "poi-marker",
       html: '<span class="poi-icon">🏥</span>',
@@ -1935,26 +2007,15 @@
   }
 
   function toggleHospitales() {
-    coberturaVisible = !coberturaVisible;
-    localStorage.setItem(CLAVE_HOSPITALES_VISIBLE, coberturaVisible);
-    if (coberturaVisible) {
-      dibujarHospitales();
-      mostrarToast("Capa de hospitales activada", "success");
-    } else {
-      Object.keys(hospitalesLayers).forEach(function (id) {
-        mapa.removeLayer(hospitalesLayers[id]);
-      });
-      hospitalesLayers = {};
-      Object.keys(coberturaLayers).forEach(function (id) {
-        mapa.removeLayer(coberturaLayers[id]);
-      });
-      coberturaLayers = {};
-      mostrarToast("Capa de hospitales desactivada", "info");
-    }
+    var activar = !hayCoberturaVisible();
+    aplicarCapasHospitales(activar, activar);
+    mostrarToast(activar ? "Capa de hospitales activada" : "Capa de hospitales desactivada", activar ? "success" : "info");
   }
 
   function dibujarCobertura() {
-    if (typeof L === "undefined" || !mapa || !coberturaVisible) return;
+    if (typeof L === "undefined" || !mapa || !capasVisibles.cobertura) return;
+    if (Object.keys(coberturaLayers).length === hospitales.length &&
+        sinCambios("coberturaLayers", firmaHospitales() + "#" + radioCobertura)) return;
     Object.keys(coberturaLayers).forEach(function (id) {
       mapa.removeLayer(coberturaLayers[id]);
     });
@@ -1979,11 +2040,46 @@
   function cambiarRadioCobertura(nuevoRadio) {
     radioCobertura = parseInt(nuevoRadio, 10) || 5000;
     localStorage.setItem(CLAVE_RADIO_COBERTURA, radioCobertura);
-    if (coberturaVisible) dibujarCobertura();
+    dibujarCobertura();
   }
 
-  function toggleCapa(nombre, visible) {
-    capasVisibles[nombre] = visible;
+  function cargarCapasHospitales() {
+    try {
+      var raw = localStorage.getItem(CLAVE_HOSPITALES_VISIBLE);
+      if (!raw) return;
+      if (raw.charAt(0) === "{") {
+        var o = JSON.parse(raw);
+        capasVisibles.hospitales = !!o.h;
+        capasVisibles.cobertura = !!o.c;
+      } else {
+        capasVisibles.hospitales = raw === "true";
+        capasVisibles.cobertura = raw === "true";
+      }
+    } catch (e) {}
+  }
+
+  function guardarCapasHospitales() {
+    try {
+      localStorage.setItem(CLAVE_HOSPITALES_VISIBLE,
+        JSON.stringify({ h: capasVisibles.hospitales, c: capasVisibles.cobertura }));
+    } catch (e) {}
+  }
+
+  function hayCoberturaVisible() {
+    return capasVisibles.hospitales || capasVisibles.cobertura;
+  }
+
+  function actualizarBotonHospitales() {
+    var btn = document.getElementById("btn-toggle-hospitales");
+    if (btn) btn.textContent = hayCoberturaVisible() ? "Ocultar del mapa" : "Mostrar en mapa";
+  }
+
+  function sincronizarCheckboxCapa(id, valor) {
+    var el = document.getElementById(id);
+    if (el) el.checked = valor;
+  }
+
+  function aplicarVisibilidadCapa(nombre, visible) {
     if (nombre === "vehiculos") {
       Object.keys(marcadores).forEach(function (id) {
         if (visible) marcadores[id].addTo(mapa);
@@ -2029,10 +2125,32 @@
     }
   }
 
+  function toggleCapa(nombre, visible) {
+    capasVisibles[nombre] = visible;
+    aplicarVisibilidadCapa(nombre, visible);
+    if (nombre === "hospitales" || nombre === "cobertura") {
+      guardarCapasHospitales();
+      actualizarBotonHospitales();
+    }
+  }
+
+  function aplicarCapasHospitales(hospitalesOn, coberturaOn) {
+    capasVisibles.hospitales = hospitalesOn;
+    capasVisibles.cobertura = coberturaOn;
+    guardarCapasHospitales();
+    sincronizarCheckboxCapa("layer-hospitales", hospitalesOn);
+    sincronizarCheckboxCapa("layer-cobertura", coberturaOn);
+    aplicarVisibilidadCapa("hospitales", hospitalesOn);
+    aplicarVisibilidadCapa("cobertura", coberturaOn);
+    actualizarBotonHospitales();
+  }
+
   function renderHospitales() {
     var summaryContent = $(".hospital-summary__content");
     var contenedor = $("#hospitales");
     if (!summaryContent || !contenedor) return;
+
+    if (sinCambios("hospitales", firmaHospitales())) return;
 
     var tipos = {};
     var totalCamas = 0;
@@ -2083,15 +2201,20 @@
   function rellenarSelectorHistorial() {
     var sel = $("#hist-vehiculo");
     if (!sel) return;
-    sel.innerHTML = vehiculos.map(function (v) {
+    var opciones = vehiculos.map(function (v) {
       return '<option value="' + v.id + '">' + esc(v.nombre) + ' (ID ' + v.id + ')</option>';
     }).join("");
-    if (rellenarSelectorHistorial._inicializado) return;
-    rellenarSelectorHistorial._inicializado = true;
-    var rango = $("#hist-rango").value;
-    if (rango && rango !== "personalizado") {
-      aplicarRangoHistorial(rango);
+    if (!rellenarSelectorHistorial._inicializado) {
+      rellenarSelectorHistorial._inicializado = true;
+      sel.innerHTML = opciones;
+      var rango = $("#hist-rango").value;
+      if (rango && rango !== "personalizado") aplicarRangoHistorial(rango);
+      return;
     }
+    if (sinCambios("hist-vehiculos", opciones)) return;
+    var seleccionado = sel.value;
+    sel.innerHTML = opciones;
+    if (seleccionado && sel.querySelector('option[value="' + seleccionado + '"]')) sel.value = seleccionado;
   }
 
   function fechaLocalInput(fecha) {
@@ -2492,13 +2615,26 @@
         return t >= dDesde && t <= dHasta;
       });
       function mezclarLocales(arr) {
+        var grupos = new Map();
+        var agregar = function (clave, tiempo) {
+          var g = grupos.get(clave);
+          if (!g) { g = []; grupos.set(clave, g); }
+          g.push(tiempo);
+        };
+        arr.forEach(function (x) {
+          agregar(x.type + "|" + vehiculoNombre(x.deviceId), new Date(x.eventTime || 0).getTime());
+        });
         localesRango.forEach(function (e) {
           var t = new Date(e.hora).getTime();
-          var dup = arr.some(function (x) {
-            var xt = new Date(x.eventTime || 0).getTime();
-            return x.type === e.tipo && vehiculoNombre(x.deviceId) === e.vehiculo && Math.abs(xt - t) < 180000;
-          });
-          if (!dup) arr.push({ id: e.id, type: e.tipo, eventTime: e.hora, _vehiculo: e.vehiculo, _geozona: e.geozona, _detalle: e.detalle, _direccion: e.direccion || "", _lat: e.lat, _lon: e.lon });
+          var clave = e.tipo + "|" + e.vehiculo;
+          var g = grupos.get(clave);
+          if (g) {
+            for (var i = 0; i < g.length; i++) {
+              if (Math.abs(g[i] - t) < 180000) return;
+            }
+          }
+          agregar(clave, t);
+          arr.push({ id: e.id, type: e.tipo, eventTime: e.hora, _vehiculo: e.vehiculo, _geozona: e.geozona, _detalle: e.detalle, _direccion: e.direccion || "", _lat: e.lat, _lon: e.lon });
         });
         return arr;
       }
@@ -2830,7 +2966,7 @@
   function enriquecer(d, p, distancia) {
     var estado = estadoVehiculo(d, p);
     var velocidad = p && p.speed ? Math.round(p.speed * 1.852) : 0;
-    if (velocidad > 0) registrarVelocidad(d.id, velocidad);
+    if (estado.tipo === "moving" || estado.tipo === "stopped") registrarVelocidad(d.id, velocidad);
     var encendido = p && p.attributes ? String(p.attributes.ignition) === "true" : null;
     var sos = p && p.attributes && p.attributes.alarm ? String(p.attributes.alarm) : "";
     var km = typeof distancia === "number" ? distancia / 1000 : null;
@@ -2891,10 +3027,8 @@
     dibujarPois();
     renderPois();
     renderHospitales();
-    if (coberturaVisible) {
-      dibujarHospitales();
-      dibujarCobertura();
-    }
+    dibujarHospitales();
+    dibujarCobertura();
     ajustarVista();
     renderAlarmas();
     actualizarTiempoQuieto();
@@ -2908,32 +3042,45 @@
 
   function pintarEstadisticas() {
     var total = vehiculos.length;
-    var lineas = vehiculos.filter(function (v) { return v.estado.tipo === "moving" || v.estado.tipo === "stopped"; }).length;
-    var movimiento = vehiculos.filter(function (v) { return v.estado.tipo === "moving"; }).length;
-    var detenidos = vehiculos.filter(function (v) { return v.estado.tipo === "stopped"; }).length;
-    var fuera = vehiculos.filter(function (v) { return v.estado.tipo === "offline" || v.estado.tipo === "nodata"; }).length;
-    var km = 0;
-    var conDist = 0;
-    var litrosTotal = 0;
-    var costoTotal = 0;
-    var conLitros = 0;
-    vehiculos.forEach(function (v) {
+    var lineas = 0, movimiento = 0, detenidos = 0, fuera = 0;
+    var km = 0, conDist = 0, litrosTotal = 0, costoTotal = 0, conLitros = 0;
+    var ids = [];
+    for (var i = 0; i < vehiculos.length; i++) {
+      var v = vehiculos[i];
+      var tipo = v.estado.tipo;
+      if (tipo === "moving" || tipo === "stopped") lineas++;
+      if (tipo === "moving") movimiento++;
+      else if (tipo === "stopped") detenidos++;
+      else if (tipo === "offline" || tipo === "nodata") fuera++;
       if (v.distancia !== null) { km += v.distancia; conDist++; }
       if (v.litros !== null) { litrosTotal += v.litros; conLitros++; }
       if (v.costo !== null) costoTotal += v.costo;
-    });
-    $("#stat-total").textContent = total;
-    $("#stat-total-trend").textContent = "ID: " + vehiculos.map(function (v) { return v.id; }).join(", ") || "–";
-    $("#stat-online").textContent = lineas;
-    $("#stat-online-trend").textContent = movimiento + " en movimiento · " + detenidos + " detenidos";
-    $("#stat-moving").textContent = movimiento;
-    $("#stat-moving-trend").textContent = fuera ? fuera + " sin señal" : "toda la flota reportando";
-    $("#stat-distance").textContent = conDist ? (km / 1000).toLocaleString("es", { maximumFractionDigits: 1 }) + " km" : "–";
-    $("#stat-distance-trend").textContent = conDist ? "suma de vehículos con dato" : "se requiere el reporte diario";
-    $("#stat-fuel").textContent = conLitros ? litrosTotal.toLocaleString("es", { maximumFractionDigits: 1 }) + " L" : "–";
-    $("#stat-fuel-trend").textContent = conLitros
+      ids.push(v.id);
+    }
+    var txtTotal = String(total);
+    var txtIds = "ID: " + ids.join(", ") || "–";
+    var txtLineas = String(lineas);
+    var txtOnlineTrend = movimiento + " en movimiento · " + detenidos + " detenidos";
+    var txtMovimiento = String(movimiento);
+    var txtMovingTrend = fuera ? fuera + " sin señal" : "toda la flota reportando";
+    var txtKm = conDist ? (km / 1000).toLocaleString("es", { maximumFractionDigits: 1 }) + " km" : "–";
+    var txtKmTrend = conDist ? "suma de vehículos con dato" : "se requiere el reporte diario";
+    var txtLitros = conLitros ? litrosTotal.toLocaleString("es", { maximumFractionDigits: 1 }) + " L" : "–";
+    var txtCosto = conLitros
       ? (config.precioCombustible ? "$ " + Math.round(costoTotal).toLocaleString("es-CO") + " COP" : "sin precio configurado")
       : "se requiere distancia y consumo";
+    if (sinCambios("stats", [txtTotal, txtIds, txtLineas, txtOnlineTrend, txtMovimiento, txtMovingTrend,
+      txtKm, txtKmTrend, txtLitros, txtCosto].join("|"))) return;
+    $("#stat-total").textContent = txtTotal;
+    $("#stat-total-trend").textContent = txtIds;
+    $("#stat-online").textContent = txtLineas;
+    $("#stat-online-trend").textContent = txtOnlineTrend;
+    $("#stat-moving").textContent = txtMovimiento;
+    $("#stat-moving-trend").textContent = txtMovingTrend;
+    $("#stat-distance").textContent = txtKm;
+    $("#stat-distance-trend").textContent = txtKmTrend;
+    $("#stat-fuel").textContent = txtLitros;
+    $("#stat-fuel-trend").textContent = txtCosto;
   }
 
   function filtrarVehiculos() {
@@ -2951,23 +3098,9 @@
     });
   }
 
-  function pintarVehiculos() {
-    var visibles = filtrarVehiculos();
-    if (!vehiculos.length) {
-      lista.innerHTML = '<div class="vacio"><p><strong>No se encontraron vehículos.</strong></p><p class="note" style="margin-top:0.25rem;">Revisa los IDs configurados o crea dispositivos en Traccar. Sin IDs se toman todos los dispositivos de tu cuenta.</p></div>';
-      return;
-    }
-    if (!visibles.length) {
-      lista.innerHTML = '<div class="vacio"><p><strong>No hay vehículos con esos filtros.</strong></p></div>';
-      return;
-    }
-    lista.innerHTML = visibles.map(tarjeta).join("");
-    rellenarSelectoresConductores();
-  }
-
-  function tarjeta(v) {
+  function partesTarjeta(v) {
     var clasesBadge = { moving: "success", stopped: "info", offline: "warning", nodata: "neutral" };
-    var mapLink = v.tienePosicion ? '<button class="text-link" type="button" data-ver-mapa="' + v.id + '">Ver en mapa</button>' : '<span>Sin coordenadas</span>';
+    var verMapa = v.tienePosicion ? '<button class="text-link" type="button" data-ver-mapa="' + v.id + '">Ver en mapa</button>' : "";
     var sosBadge = v.sos ? '<span class="badge badge--danger badge--sos">SOS ACTIVO</span>' : "";
     var estadoBadge = v.estado.tipo === "offline" ? "" : '<span class="badge badge--' + clasesBadge[v.estado.tipo] + ' badge--estado">' + v.estado.etiqueta + '</span>';
     var velocidadBadge = "";
@@ -2976,32 +3109,135 @@
       velocidadBadge = '<span class="badge badge--danger badge--sos">EXCESO ' + v.velocidad + ' km/h</span>';
     }
     var referencias = v.tienePosicion ? buscarReferenciasCercanas(v.lat, v.lon, 7) : [];
-    var refsHtml = "";
+    var refs = "";
     if (referencias.length) {
       var ref = referencias[0];
       var iconoRef = ref.tipo === "hospital" ? "🏥" : "📌";
       var nombre = ref.nombre;
       if (nombre.length > 25) nombre = nombre.substring(0, 25) + "...";
-      refsHtml = '<div class="vehicle__refs"><span class="vehicle__refs-title">📍 Cerca de:</span>' +
-        '<span class="vehicle__ref">' + iconoRef + ' <span class="vehicle__ref-name">' + esc(nombre) + '</span> <span class="vehicle__ref-dist">(' + ref.distancia.toFixed(1) + ' km)</span></span>' +
-        '</div>';
+      refs = '<span class="vehicle__refs-title">📍 Cerca de:</span>' +
+        '<span class="vehicle__ref">' + iconoRef + ' <span class="vehicle__ref-name">' + esc(nombre) + '</span> <span class="vehicle__ref-dist">(' + ref.distancia.toFixed(1) + ' km)</span></span>';
     }
-    return '<article class="card vehicle vehicle--' + v.estado.tipo + '">' +
-      '<header class="vehicle__head">' +
-        '<div><h3 class="vehicle__name">' + esc(v.nombre) + '</h3></div>' +
-          '<span class="cluster">' +
-          estadoBadge + sosBadge + velocidadBadge +
-        '</span>' +
-      '</header>' +
-      refsHtml +
-      '<div class="vehicle__compact-stats">' +
-        '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value">' + v.velocidad + ' km/h</span></div>' +
-        '<div><span class="vehicle__stat-label">Conductor</span>' +
-          '<select class="conductor-select" data-conductor="' + v.id + '" aria-label="Conductor del vehículo"></select>' +
+    return {
+      clase: "card vehicle vehicle--" + v.estado.tipo,
+      nombre: esc(v.nombre),
+      badges: estadoBadge + sosBadge + velocidadBadge,
+      refs: refs,
+      velocidad: v.velocidad + " km/h",
+      verMapa: verMapa,
+      conductor: opcionesConductorHTML(conductores[v.id] || "")
+    };
+  }
+
+  function crearTarjeta(v) {
+    var p = partesTarjeta(v);
+    var caja = document.createElement("div");
+    caja.innerHTML =
+      '<article class="' + p.clase + '" data-vehiculo="' + v.id + '">' +
+        '<header class="vehicle__head">' +
+          '<div><h3 class="vehicle__name" data-campo="nombre">' + p.nombre + '</h3></div>' +
+          '<span class="cluster" data-campo="badges">' + p.badges + '</span>' +
+        '</header>' +
+        '<div class="vehicle__refs" data-campo="refs">' + p.refs + '</div>' +
+        '<div class="vehicle__compact-stats">' +
+          '<div><span class="vehicle__stat-label">Velocidad</span><span class="vehicle__stat-value" data-campo="velocidad">' + p.velocidad + '</span></div>' +
+          '<div><span class="vehicle__stat-label">Conductor</span>' +
+            '<select class="conductor-select" data-conductor="' + v.id + '" aria-label="Conductor del vehículo">' + p.conductor + '</select>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div class="vehicle__actions"><button class="button button--outlined" type="button" data-abrir-modal-vehiculo="' + v.id + '"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> Ver detalles</button>' + (v.tienePosicion ? mapLink : '') + '</div>' +
-    '</article>';
+        '<div class="vehicle__actions">' +
+          '<button class="button button--outlined" type="button" data-abrir-modal-vehiculo="' + v.id + '"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg> Ver detalles</button>' +
+          '<span data-campo="ver-mapa">' + p.verMapa + '</span>' +
+        '</div>' +
+      '</article>';
+    var nodo = caja.firstElementChild;
+    nodo._p = p;
+    nodo._q = {
+      nombre: nodo.querySelector('[data-campo="nombre"]'),
+      badges: nodo.querySelector('[data-campo="badges"]'),
+      refs: nodo.querySelector('[data-campo="refs"]'),
+      velocidad: nodo.querySelector('[data-campo="velocidad"]'),
+      verMapa: nodo.querySelector('[data-campo="ver-mapa"]'),
+      conductor: nodo.querySelector(".conductor-select")
+    };
+    return nodo;
+  }
+
+  function actualizarTarjeta(nodo, v) {
+    var p = partesTarjeta(v);
+    var a = nodo._p;
+    var q = nodo._q;
+    if (!a || !q) return;
+    if (a.clase !== p.clase) nodo.className = p.clase;
+    if (a.nombre !== p.nombre) q.nombre.innerHTML = p.nombre;
+    if (a.badges !== p.badges) q.badges.innerHTML = p.badges;
+    if (a.refs !== p.refs) q.refs.innerHTML = p.refs;
+    if (a.velocidad !== p.velocidad) q.velocidad.textContent = p.velocidad;
+    if (a.verMapa !== p.verMapa) q.verMapa.innerHTML = p.verMapa;
+    if (a.conductor !== p.conductor) q.conductor.innerHTML = p.conductor;
+    nodo._p = p;
+  }
+
+  function vaciarListaVehiculos(html, conservarTarjetas) {
+    if (listaVaciaActual === html) return;
+    if (conservarTarjetas) {
+      tarjetaNodos.forEach(function (nodo) {
+        if (nodo.parentNode === lista) lista.removeChild(nodo);
+      });
+    } else {
+      tarjetaNodos.clear();
+    }
+    lista.innerHTML = html;
+    listaVaciaActual = html;
+  }
+
+  function pintarVehiculos() {
+    var visibles = filtrarVehiculos();
+    if (!vehiculos.length) {
+      vaciarListaVehiculos('<div class="vacio"><p><strong>No se encontraron vehículos.</strong></p><p class="note" style="margin-top:0.25rem;">Revisa los IDs configurados o crea dispositivos en Traccar. Sin IDs se toman todos los dispositivos de tu cuenta.</p></div>', false);
+      return;
+    }
+    if (!visibles.length) {
+      vaciarListaVehiculos('<div class="vacio"><p><strong>No hay vehículos con esos filtros.</strong></p></div>', true);
+      return;
+    }
+    if (listaVaciaActual !== null) {
+      lista.innerHTML = "";
+      listaVaciaActual = null;
+    }
+
+    var todos = new Set();
+    for (var i = 0; i < vehiculos.length; i++) todos.add(vehiculos[i].id);
+    tarjetaNodos.forEach(function (nodo, id) {
+      if (!todos.has(id)) {
+        if (nodo.parentNode === lista) lista.removeChild(nodo);
+        tarjetaNodos.delete(id);
+      }
+    });
+
+    var nodosOk = new Set();
+    var orden = [];
+    for (var k = 0; k < visibles.length; k++) {
+      var v = visibles[k];
+      var nodo = tarjetaNodos.get(v.id);
+      if (!nodo) {
+        nodo = crearTarjeta(v);
+        tarjetaNodos.set(v.id, nodo);
+      } else {
+        actualizarTarjeta(nodo, v);
+      }
+      nodosOk.add(nodo);
+      orden.push(nodo);
+    }
+
+    var hijos = Array.prototype.slice.call(lista.children);
+    for (var j = 0; j < hijos.length; j++) {
+      if (!nodosOk.has(hijos[j])) lista.removeChild(hijos[j]);
+    }
+
+    for (var m = 0; m < orden.length; m++) {
+      if (lista.children[m] !== orden[m]) lista.insertBefore(orden[m], lista.children[m] || null);
+    }
   }
 
   function pintarMapa() {
@@ -3110,28 +3346,28 @@
 
   var listaConductores = cargarListaConductores();
 
-  function rellenarSelectoresConductores() {
-    document.querySelectorAll(".conductor-select").forEach(function (sel) {
-      var id = parseInt(sel.getAttribute("data-conductor"), 10);
-      var actual = conductores[id] || "";
-      sel.innerHTML = '<option value="">Sin asignar</option>' +
-        listaConductores.map(function (c) {
-          return '<option value="' + esc(c) + '"' + (c === actual ? ' selected' : '') + '>' + esc(c) + '</option>';
-        }).join("");
-    });
-    var filtroConductor = $("#filtro-conductor");
-    if (filtroConductor) {
-      var valActual = filtroConductor.value;
-      filtroConductor.innerHTML = '<option value="">Todos los conductores</option>' +
-        listaConductores.map(function (c) {
-          return '<option value="' + esc(c) + '"' + (c === valActual ? ' selected' : '') + '>' + esc(c) + '</option>';
-        }).join("");
+  function opcionesConductorHTML(actual) {
+    var html = '<option value="">Sin asignar</option>';
+    for (var i = 0; i < listaConductores.length; i++) {
+      var c = listaConductores[i];
+      html += '<option value="' + esc(c) + '"' + (c === actual ? ' selected' : '') + '>' + esc(c) + '</option>';
     }
+    return html;
+  }
+
+  function rellenarSelectoresConductores() {
+    var filtroConductor = $("#filtro-conductor");
+    if (!filtroConductor) return;
+    if (sinCambios("conductores", listaConductores.join("|"))) return;
+    var valFiltro = filtroConductor.value;
+    filtroConductor.innerHTML = '<option value="">Todos los conductores</option>' +
+      listaConductores.map(function (c) {
+        return '<option value="' + esc(c) + '"' + (c === valFiltro ? ' selected' : '') + '>' + esc(c) + '</option>';
+      }).join("");
   }
 
   function buscarVehiculo(id) {
-    for (var i = 0; i < vehiculos.length; i++) if (vehiculos[i].id === id) return vehiculos[i];
-    return null;
+    return vehiculosIndice.get(id) || null;
   }
 
   function esc(s) {
@@ -3264,14 +3500,13 @@
         '<div class="vehiculo-modal-stat"><span class="vehicle__stat-label">Vel. máx / prom</span><span class="vehicle__stat-value">' + stats.max + ' / ' + stats.promedio + ' km/h</span></div>' +
       '</div>' +
       '<dl class="vehicle__meta" style="margin-top:1rem;">' +
-        '<div><dt>Conductor</dt><dd><select class="conductor-select" data-conductor="' + v.id + '" aria-label="Conductor del vehículo"></select></dd></div>' +
+        '<div><dt>Conductor</dt><dd><select class="conductor-select" data-conductor="' + v.id + '" aria-label="Conductor del vehículo">' + opcionesConductorHTML(conductores[v.id] || "") + '</select></dd></div>' +
         '<div><dt>Tiempo quieto</dt><dd>' + tiempoQuietoStr + '</dd></div>' +
         '<div><dt>Coordenadas</dt><dd>' + coords + '</dd></div>' +
         '<div><dt>Dirección</dt><dd>' + esc(direccion) + '</dd></div>' +
         '<div><dt>Última señal</dt><dd>' + hora + '</dd></div>' +
       '</dl>' +
       refsHtml;
-    rellenarSelectoresConductores();
     modalV.hidden = false;
   }
 
@@ -3328,7 +3563,7 @@
     }
     config = cfg;
     guardarConfig(config);
-    vehiculos = [];
+    asignarVehiculos([]);
     $("#btn-refrescar").disabled = false;
     cerrarModal();
     if (haySesion()) {
@@ -3465,6 +3700,7 @@
 
   function iniciar() {
     aplicarHospitalesCustom();
+    cargarCapasHospitales();
     lista.addEventListener("click", function (e) {
       var b = e.target.closest("[data-ver-mapa]");
       if (b) verEnMapa(parseInt(b.getAttribute("data-ver-mapa"), 10));
@@ -3687,20 +3923,16 @@
 
     var btnToggleHospitales = $("#btn-toggle-hospitales");
     var selectRadio = $("#select-radio-cobertura");
-    var visibleGuardado = localStorage.getItem(CLAVE_HOSPITALES_VISIBLE) === "true";
+    sincronizarCheckboxCapa("layer-hospitales", capasVisibles.hospitales);
+    sincronizarCheckboxCapa("layer-cobertura", capasVisibles.cobertura);
+    actualizarBotonHospitales();
     var radioGuardado = localStorage.getItem(CLAVE_RADIO_COBERTURA);
     if (radioGuardado) {
       radioCobertura = parseInt(radioGuardado, 10);
       selectRadio.value = radioCobertura;
     }
-    if (visibleGuardado) {
-      coberturaVisible = true;
-      btnToggleHospitales.textContent = "Ocultar del mapa";
-    }
     btnToggleHospitales.addEventListener("click", function () {
       toggleHospitales();
-      this.textContent = coberturaVisible ? "Ocultar del mapa" : "Mostrar en mapa";
-      if (coberturaVisible) dibujarCobertura();
     });
     selectRadio.addEventListener("change", function () {
       cambiarRadioCobertura(this.value);
