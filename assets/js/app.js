@@ -507,6 +507,115 @@
     cacheReferencias.clear();
   }
 
+  var cacheRutas = new Map();
+  var CACHE_RUTAS_TTL = 5 * 60 * 1000;
+  var CACHE_RUTAS_MAX = 40;
+  function leerCacheRutas(clave) {
+    var item = cacheRutas.get(clave);
+    if (!item) return null;
+    if (Date.now() - item.t > CACHE_RUTAS_TTL) {
+      cacheRutas.delete(clave);
+      return null;
+    }
+    cacheRutas.delete(clave);
+    cacheRutas.set(clave, item);
+    return item.d;
+  }
+  function guardarCacheRutas(clave, d) {
+    if (cacheRutas.size >= CACHE_RUTAS_MAX) {
+      cacheRutas.delete(cacheRutas.keys().next().value);
+    }
+    cacheRutas.set(clave, { t: Date.now(), d: d });
+  }
+  function limpiarCacheRutas() {
+    cacheRutas.clear();
+  }
+  function rangoCerrado(hastaIso) {
+    var t = new Date(hastaIso).getTime();
+    return isFinite(t) && t < Date.now() - 60000;
+  }
+
+  function ejecutarConLimite(items, limite, tarea, alProgreso) {
+    var total = items.length;
+    if (!total) return Promise.resolve([]);
+    var resultados = new Array(total);
+    var indice = 0;
+    var hechos = 0;
+    var n = Math.max(1, Math.min(limite || 1, total));
+    var workers = [];
+    for (var w = 0; w < n; w++) {
+      workers.push((function bucle() {
+        var i = indice++;
+        if (i >= total) return Promise.resolve();
+        return Promise.resolve(tarea(items[i], i)).then(function (r) {
+          resultados[i] = r;
+          hechos++;
+          if (alProgreso) alProgreso(hechos, total);
+          return bucle();
+        });
+      })());
+    }
+    return Promise.all(workers).then(function () {
+      return resultados;
+    });
+  }
+
+  function simplificarRuta(puntos, tolerancia) {
+    var n = puntos ? puntos.length : 0;
+    if (n <= 2) return puntos ? puntos.slice() : [];
+    var lat = new Float64Array(n);
+    var lon = new Float64Array(n);
+    var i;
+    for (i = 0; i < n; i++) {
+      lat[i] = Number(puntos[i].latitude) || 0;
+      lon[i] = Number(puntos[i].longitude) || 0;
+    }
+    var cosLat = Math.cos(lat[0] * Math.PI / 180);
+    if (!isFinite(cosLat) || cosLat < 0.01) cosLat = 1;
+    var conservar = new Uint8Array(n);
+    conservar[0] = 1;
+    conservar[n - 1] = 1;
+    var pila = [0, n - 1];
+    var tol2 = (tolerancia || 0) * (tolerancia || 0);
+    while (pila.length) {
+      var fin = pila.pop();
+      var ini = pila.pop();
+      if (fin - ini < 2) continue;
+      var ax = lon[ini] * cosLat, ay = lat[ini];
+      var bx = lon[fin] * cosLat, by = lat[fin];
+      var dx = bx - ax, dy = by - ay;
+      var largo2 = dx * dx + dy * dy;
+      var mejor = -1;
+      var mejorD2 = tol2;
+      for (i = ini + 1; i < fin; i++) {
+        var px = lon[i] * cosLat, py = lat[i];
+        var d2;
+        if (largo2 === 0) {
+          var ex = px - ax, ey = py - ay;
+          d2 = ex * ex + ey * ey;
+        } else {
+          var t = ((px - ax) * dx + (py - ay) * dy) / largo2;
+          if (t < 0) t = 0; else if (t > 1) t = 1;
+          var cx = ax + t * dx - px, cy = ay + t * dy - py;
+          d2 = cx * cx + cy * cy;
+        }
+        if (d2 > mejorD2) {
+          mejorD2 = d2;
+          mejor = i;
+        }
+      }
+      if (mejor !== -1) {
+        conservar[mejor] = 1;
+        pila.push(ini, mejor, mejor, fin);
+      }
+    }
+    var salida = [];
+    for (i = 0; i < n; i++) {
+      if (conservar[i]) salida.push(puntos[i]);
+    }
+    return salida;
+  }
+
   var vehiculosIndice = new Map();
   function asignarVehiculos(arr) {
     vehiculos = arr;
@@ -891,6 +1000,7 @@
     if (!config.baseUrl || refrescando) return;
     refrescando = true;
     estadoConexion("wait", "Actualizando…");
+    limpiarCacheRutas();
     Promise.all([llamarApi("/devices"), llamarApi("/positions")])
       .then(function (res) {
         var dispositivos = res[0];
@@ -2309,21 +2419,48 @@
     var q = "/positions?deviceId=" + encodeURIComponent(deviceId) +
       "&from=" + encodeURIComponent(desdeIso) +
       "&to=" + encodeURIComponent(hastaIso);
-    return llamarApi(q, null, { timeoutMs: 60000 });
+    var clave = "pos|" + deviceId + "|" + desdeIso + "|" + hastaIso;
+    var cacheable = rangoCerrado(hastaIso);
+    if (cacheable) {
+      var guardado = leerCacheRutas(clave);
+      if (guardado) return Promise.resolve(guardado);
+    }
+    return llamarApi(q, null, { timeoutMs: 60000 }).then(function (d) {
+      if (cacheable) guardarCacheRutas(clave, d);
+      return d;
+    });
   }
 
   function reporteRutaTraccar(deviceId, desdeIso, hastaIso) {
     var q = "/reports/route?deviceId=" + encodeURIComponent(deviceId) +
       "&from=" + encodeURIComponent(desdeIso) +
       "&to=" + encodeURIComponent(hastaIso);
-    return llamarApi(q, null, { timeoutMs: 60000 });
+    var clave = "ruta|" + deviceId + "|" + desdeIso + "|" + hastaIso;
+    var cacheable = rangoCerrado(hastaIso);
+    if (cacheable) {
+      var guardado = leerCacheRutas(clave);
+      if (guardado) return Promise.resolve(guardado);
+    }
+    return llamarApi(q, null, { timeoutMs: 60000 }).then(function (d) {
+      if (cacheable) guardarCacheRutas(clave, d);
+      return d;
+    });
   }
 
   function reporteViajesTraccar(deviceId, desdeIso, hastaIso) {
     var q = "/reports/trips?deviceId=" + encodeURIComponent(deviceId) +
       "&from=" + encodeURIComponent(desdeIso) +
       "&to=" + encodeURIComponent(hastaIso);
-    return llamarApi(q, null, { timeoutMs: 60000 });
+    var clave = "viajes|" + deviceId + "|" + desdeIso + "|" + hastaIso;
+    var cacheable = rangoCerrado(hastaIso);
+    if (cacheable) {
+      var guardado = leerCacheRutas(clave);
+      if (guardado) return Promise.resolve(guardado);
+    }
+    return llamarApi(q, null, { timeoutMs: 60000 }).then(function (d) {
+      if (cacheable) guardarCacheRutas(clave, d);
+      return d;
+    });
   }
 
   function clonarViaje(v) {
@@ -2396,7 +2533,14 @@
       return;
     }
     var info = $("#hist-info");
+    var historialInicio = Date.now();
     info.textContent = "Cargando...";
+    var relojHistorial = setInterval(function () {
+      info.textContent = "Cargando... " + Math.round((Date.now() - historialInicio) / 1000) + " s";
+    }, 1000);
+    function terminarHistorial() {
+      clearInterval(relojHistorial);
+    }
     Promise.all([
       reporteViajesTraccar(id, desdeIso, hastaIso),
       reporteRutaTraccar(id, desdeIso, hastaIso)
@@ -2414,6 +2558,7 @@
         rutaT[rp] = pares[rp].t;
       }
       if (!tripsApi.length && !ruta.length) {
+        terminarHistorial();
         info.textContent = "No hay viajes en ese rango de tiempo.";
         return;
       }
@@ -2478,6 +2623,7 @@
         }];
       }
       if (!viajes.length) {
+        terminarHistorial();
         info.textContent = "No hay viajes en ese rango de tiempo.";
         return;
       }
@@ -2492,7 +2638,8 @@
       pbMarcadoresInicio = [];
       pbMarcadoresFin = [];
       pbDetalles.forEach(function (item) {
-        var puntos = item.posiciones.map(function (p) { return [p.latitude, p.longitude]; });
+        var dibujo = simplificarRuta(item.posiciones, 0.0001);
+        var puntos = dibujo.map(function (p) { return [p.latitude, p.longitude]; });
         if (puntos.length < 2 && item.viaje.startLat != null) {
           puntos = [
             [item.viaje.startLat, item.viaje.startLon],
@@ -2539,7 +2686,9 @@
       $("#pb-slider").max = viajes.length - 1;
       $("#pb-slider").value = 0;
       actualizarInfoPlaybackViajes(viajes);
+      terminarHistorial();
     }).catch(function (err) {
+      terminarHistorial();
       info.textContent = "Error: " + (err.message || "desconocido");
     });
   }
@@ -2827,23 +2976,29 @@
 
     function detectarParadasRuta(ruta, minMin) {
       minMin = minMin || 5;
-      var arr = (Array.isArray(ruta) ? ruta : []).slice().sort(function (a, b) {
-        return new Date(a.fixTime) - new Date(b.fixTime);
+      var arr = (Array.isArray(ruta) ? ruta : []).map(function (p) {
+        return {
+          p: p,
+          t: new Date(p.fixTime).getTime(),
+          v: p.speed ? Math.round(p.speed * 1.852) : 0
+        };
+      }).sort(function (a, b) {
+        return a.t - b.t;
       });
       var paradas = [];
       var inicio = null;
       function cerrar(fin) {
         if (!inicio) return;
-        var durMs = new Date(fin.fixTime) - new Date(inicio.fixTime);
+        var durMs = fin.t - inicio.t;
         if (durMs / 60000 >= minMin) {
           paradas.push({
-            inicio: inicio.fixTime,
-            fin: fin.fixTime,
+            inicio: inicio.p.fixTime,
+            fin: fin.p.fixTime,
             durMin: Math.round(durMs / 60000),
-            latIni: inicio.latitude,
-            lonIni: inicio.longitude,
-            latFin: fin.latitude,
-            lonFin: fin.longitude,
+            latIni: inicio.p.latitude,
+            lonIni: inicio.p.longitude,
+            latFin: fin.p.latitude,
+            lonFin: fin.p.longitude,
             km: 0,
             maxVel: 0,
             promVel: 0,
@@ -2853,8 +3008,7 @@
         inicio = null;
       }
       for (var i = 0; i < arr.length; i++) {
-        var vel = arr[i].speed ? Math.round(arr[i].speed * 1.852) : 0;
-        if (vel <= 1) {
+        if (arr[i].v <= 1) {
           if (!inicio) inicio = arr[i];
         } else if (inicio) {
           cerrar(arr[i]);
@@ -2865,7 +3019,15 @@
     }
 
     var usaRuta = tipo === "paradas";
-    Promise.all(vehiculos.map(function (v) {
+    var repTotal = vehiculos.length;
+    var repHechos = 0;
+    function progresoReporte() {
+      repHechos++;
+      if (repHechos < repTotal) {
+        resultado.innerHTML = '<p class="note">Generando reporte... ' + repHechos + '/' + repTotal + ' vehículos</p>';
+      }
+    }
+    ejecutarConLimite(vehiculos, 6, function (v) {
       var carga = usaRuta
         ? reporteRutaTraccar(v.id, desdeIso, hastaIso)
         : reporteViajesTraccar(v.id, desdeIso, hastaIso);
@@ -2946,7 +3108,7 @@
           ultima: null
         };
       });
-    })).then(function (resultados) {
+    }, progresoReporte).then(function (resultados) {
       var html = "";
       if (tipo === "resumen" || tipo === "vehiculo") {
         html += '<h3 style="margin:0.5rem 0;font-size:1rem;">Resumen total del rango</h3>';

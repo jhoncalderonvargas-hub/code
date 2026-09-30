@@ -3,6 +3,8 @@
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
+const zlib = require("zlib");
+const { Readable } = require("stream");
 
 const PORT = process.env.PORT || 3000;
 const TRACCAR = (process.env.TRACCAR_URL || "http://127.0.0.1:8082").replace(/\/+$/, "");
@@ -18,7 +20,7 @@ const MIME = {
   ".ico": "image/x-icon"
 };
 
-const CABECERAS_FILTRADAS = ["host", "connection", "accept-encoding", "content-length"];
+const CABECERAS_FILTRADAS = ["host", "connection", "content-length"];
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
@@ -48,7 +50,20 @@ const server = http.createServer(async (req, res) => {
       res.end();
       return;
     }
-    res.writeHead(200, { "Content-Type": MIME[path.extname(archivo)] || "application/octet-stream" });
+    const tipo = MIME[path.extname(archivo)] || "application/octet-stream";
+    const cabeceras = { "Content-Type": tipo, "Cache-Control": "no-cache" };
+    const comprimible = /^(text\/|application\/(javascript|json))/.test(tipo);
+    if (comprimible && aceptaGzip(req) && contenido.length > 1024) {
+      const comprimido = zlib.gzipSync(contenido, { level: 6 });
+      cabeceras["Content-Encoding"] = "gzip";
+      cabeceras["Content-Length"] = comprimido.length;
+      cabeceras["Vary"] = "Accept-Encoding";
+      res.writeHead(200, cabeceras);
+      res.end(comprimido);
+      return;
+    }
+    cabeceras["Content-Length"] = contenido.length;
+    res.writeHead(200, cabeceras);
     res.end(contenido);
   });
 });
@@ -59,14 +74,20 @@ async function proxyApi(req, res, pathname, busqueda) {
     const cuerpo = await leerCuerpo(req);
     const cabeceras = {};
     for (const [clave, valor] of Object.entries(req.headers)) {
-      if (!CABECERAS_FILTRADAS.includes(clave)) cabeceras[clave] = valor;
+      if (CABECERAS_FILTRADAS.includes(clave)) continue;
+      cabeceras[clave] = valor;
     }
+    // El fetch de Node descomprime de forma transparente pero conserva las
+    // cabeceras content-encoding/content-length, lo que produce respuestas
+    // inconsistentes. Se pide sin comprimir y se comprime aqui, en streaming.
+    cabeceras["accept-encoding"] = "identity";
+
     const upstream = await fetch(objetivo, {
       method: req.method,
       headers: cabeceras,
       body: ["GET", "HEAD"].includes(req.method) ? undefined : Buffer.from(cuerpo)
     });
-    const datos = await upstream.arrayBuffer();
+
     const cabecerasSalida = {
       "Content-Type": upstream.headers.get("content-type") || "application/json; charset=utf-8"
     };
@@ -74,14 +95,43 @@ async function proxyApi(req, res, pathname, busqueda) {
       ? upstream.headers.getSetCookie()
       : (upstream.headers.get("set-cookie") ? [upstream.headers.get("set-cookie")] : []);
     if (cookies.length) cabecerasSalida["Set-Cookie"] = cookies;
+
+    // El JSON de Traccar comprime ~60x (claves repetidas en cada posicion).
+    const comprimir = Boolean(upstream.body) &&
+      ["GET", "HEAD"].includes(req.method) &&
+      aceptaGzip(req);
+    if (comprimir) {
+      cabecerasSalida["Content-Encoding"] = "gzip";
+      cabecerasSalida["Vary"] = "Accept-Encoding";
+    }
+
     res.writeHead(upstream.status, cabecerasSalida);
-    res.end(Buffer.from(datos));
+    if (!upstream.body || req.method === "HEAD") {
+      res.end();
+      return;
+    }
+
+    const flujo = Readable.fromWeb(upstream.body);
+    flujo.on("error", () => res.destroy());
+    res.on("close", () => flujo.destroy());
+    if (comprimir) {
+      flujo.pipe(zlib.createGzip({ level: 6 })).pipe(res);
+    } else {
+      flujo.pipe(res);
+    }
   } catch (err) {
-    res.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+    if (!res.headersSent) {
+      res.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
+    }
     res.end(JSON.stringify({
       error: "El proxy no pudo conectarse con Traccar (" + TRACCAR + "). " + err.message
     }));
   }
+}
+
+function aceptaGzip(req) {
+  const cabecera = req.headers["accept-encoding"] || "";
+  return /\bgzip\b/.test(cabecera);
 }
 
 function leerCuerpo(req) {
